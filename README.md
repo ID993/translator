@@ -30,8 +30,8 @@ This app is designed to simplify communication, making it ideal for travelers, s
 
 ### Environment Variables
 Create a `.env` file in the `backend` folder with the following:
-OPENAI_API_KEY=your_openai_key
-FIREBASE_CONFIG=your_firebase_config
+- OPENAI_API_KEY=your_openai_key
+- FIREBASE_CONFIG=your_firebase_config
 
 ### Setup
 1. Clone the repository:
