@@ -35,8 +35,8 @@ FIREBASE_CONFIG=your_firebase_config
 
 ### Setup
 1. Clone the repository:
-   - git clone https://github.com/your-username/repo-name.git
-   - cd repo-name
+   - git clone https://github.com/ID993/translator.git
+   - cd translator
 2. Navigate to the frontend folder and run:
    - flutter pub get
    - flutter run
