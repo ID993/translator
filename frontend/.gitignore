@@ -41,3 +41,17 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Flutter-specific ignores
+**/build/
+**/ios/Pods/
+**/.dart_tool/
+**/.idea/
+**/.vscode/
+**/pubspec.lock
+**/*.iml
+
+# General
+.DS_Store
+Thumbs.db
+android/app/google-services.json
