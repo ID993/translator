@@ -55,3 +55,4 @@ app.*.map.json
 .DS_Store
 Thumbs.db
 android/app/google-services.json
+lib/firebase_options.dart
