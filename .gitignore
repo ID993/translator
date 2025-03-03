@@ -90,3 +90,4 @@ cython_debug/
 # General
 .DS_Store
 Thumbs.db
+frontend/android/app/google-services.json
