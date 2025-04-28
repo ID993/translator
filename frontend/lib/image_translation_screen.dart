@@ -9,6 +9,17 @@ import 'package:path/path.dart' as path;
 import 'package:http/http.dart' as http;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:logger/logger.dart';
+import 'dart:convert';
+
+const Map<String, String> _languagesNames = {
+  'hr': 'Croatian',
+  'en': 'English',
+  'es': 'Spanish',
+  'de': 'German',
+  'fr': 'French',
+  'nl': 'Dutch',
+  'it': 'Italian',
+};
 
 class ImageTranslationScreen extends StatefulWidget {
   const ImageTranslationScreen({super.key});
@@ -18,8 +29,8 @@ class ImageTranslationScreen extends StatefulWidget {
 }
 
 class _ImageTranslationScreenState extends State<ImageTranslationScreen> {
+  final _formKey = GlobalKey<FormState>();
   File? _selectedImage;
-  Uint8List? _translatedImage;
   bool _isLoading = false;
   final ImagePicker _picker = ImagePicker();
   var logger = Logger();
@@ -28,10 +39,14 @@ class _ImageTranslationScreenState extends State<ImageTranslationScreen> {
   final detection =
       Settings.getValue<String>("detection_mode", defaultValue: "automatic");
 
-  final List<String> _languages = ['hr', 'en', 'es', 'de', 'fr', 'nl', 'it'];
+  final _languages = _languagesNames.keys.toList();
 
-  String _sourceLang = 'hr';
-  String _targetLang = 'en';
+  String? _sourceLang;
+  String? _targetLang;
+
+  String? _originalImageUrl;
+  String? _whiteImageUrl;
+  bool _showWhite = false;
 
   final _baseUrl = dotenv.env['API_URL']!;
 
@@ -40,20 +55,12 @@ class _ImageTranslationScreenState extends State<ImageTranslationScreen> {
     if (pickedFile != null) {
       setState(() {
         _selectedImage = File(pickedFile.path);
-        _translatedImage = null;
+        _originalImageUrl = null;
+        _whiteImageUrl = null;
       });
     }
   }
 
-  // Future<void> _useCamera() async {
-  //   final pickedFile = await _picker.pickImage(source: ImageSource.camera);
-  //   if (pickedFile != null) {
-  //     setState(() {
-  //       _selectedImage = File(pickedFile.path);
-  //       _translatedImage = null;
-  //     });
-  //   }
-  // }
   Future<void> _useCamera() async {
     final XFile? picked = await _picker.pickImage(source: ImageSource.camera);
     if (!mounted || picked == null) return;
@@ -106,182 +113,203 @@ class _ImageTranslationScreenState extends State<ImageTranslationScreen> {
 
     setState(() {
       _selectedImage = File(cropped.path);
-      _translatedImage = null;
+      _originalImageUrl = null;
+      _whiteImageUrl = null;
     });
   }
 
   Future<void> _sendImage() async {
     if (_selectedImage == null) return;
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
+
     try {
-      logger.d(_baseUrl);
-      logger.d(_selectedImage!.path);
       var uri = Uri.parse("$_baseUrl/translate-image");
+      var req = http.MultipartRequest('POST', uri)
+        ..files.add(
+            await http.MultipartFile.fromPath('file', _selectedImage!.path))
+        ..fields['src_lang'] = _sourceLang!
+        ..fields['tgt_lang'] = _targetLang!
+        ..fields['model'] = _model!;
 
-      var request = http.MultipartRequest('POST', uri);
-      request.files
-          .add(await http.MultipartFile.fromPath('file', _selectedImage!.path));
-      request.fields['src_lang'] = _sourceLang;
-      request.fields['tgt_lang'] = _targetLang;
-      request.fields['model'] = _model!;
+      var res = await req.send();
 
-      var response = await request.send();
-
-      if (response.statusCode == 200) {
-        Uint8List bytes = await response.stream.toBytes();
-        if (!mounted) return;
+      if (res.statusCode == 200) {
+        var body = await res.stream.bytesToString();
+        var json = jsonDecode(body);
         setState(() {
-          _translatedImage = bytes;
+          _originalImageUrl = json['original_image_url'];
+          _whiteImageUrl = json['white_image_url'];
         });
       } else {
         if (!mounted) return;
-        logger.d("Translation failed with status: ${response.statusCode}");
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content:
-                Text("Translation failed with status: ${response.statusCode}"),
-          ),
-        );
+        logger.d("Translation failed with status: ${res.statusCode}");
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("Status ${res.statusCode}")));
       }
     } catch (e) {
       if (!mounted) return;
       logger.d("Error during translation: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Error during translation: $e"),
-        ),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      setState(() => _isLoading = false);
     }
   }
 
   void _removeImage() {
     setState(() {
       _selectedImage = null;
-      _translatedImage = null;
+      _originalImageUrl = null;
+      _whiteImageUrl = null;
       _isLoading = false;
+      _showWhite = false;
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Translate Image"),
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                Column(
-                  children: [
-                    const Text("Source Language"),
-                    DropdownButton<String>(
+      appBar: AppBar(title: const Text("Translate Image")),
+      body: Form(
+        key: _formKey,
+        child: Column(
+          children: [
+            // -- LANGUAGES ROW --
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  // Source
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
                       value: _sourceLang,
-                      items: _languages
-                          .map((lang) => DropdownMenuItem(
-                                value: lang,
-                                child: Text(lang.toUpperCase()),
-                              ))
-                          .toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            _sourceLang = value;
-                          });
-                        }
-                      },
+                      decoration: InputDecoration(
+                        labelText: 'From',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: _languages.map((code) {
+                        return DropdownMenuItem(
+                          value: code,
+                          child: Text(_languagesNames[code]!),
+                        );
+                      }).toList(),
+                      onChanged: (v) => setState(() => _sourceLang = v),
+                      validator: (v) => v == null ? 'Please select' : null,
                     ),
-                  ],
-                ),
-                const SizedBox(width: 10),
-                IconButton(
-                  icon: const Icon(Icons.swap_horiz),
-                  onPressed: () {
-                    setState(() {
-                      final temp = _sourceLang;
-                      _sourceLang = _targetLang;
-                      _targetLang = temp;
-                    });
-                  },
-                ),
-                const SizedBox(width: 10),
-                Column(
-                  children: [
-                    const Text("Target Language"),
-                    DropdownButton<String>(
+                  ),
+
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.swap_horiz),
+                    onPressed: () {
+                      setState(() {
+                        final t = _sourceLang;
+                        _sourceLang = _targetLang;
+                        _targetLang = t;
+                      });
+                    },
+                  ),
+                  const SizedBox(width: 8),
+
+                  // Target
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
                       value: _targetLang,
-                      items: _languages
-                          .map((lang) => DropdownMenuItem(
-                                value: lang,
-                                child: Text(lang.toUpperCase()),
-                              ))
-                          .toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            _targetLang = value;
-                          });
-                        }
-                      },
+                      decoration: InputDecoration(
+                        labelText: 'To',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: _languages.map((code) {
+                        return DropdownMenuItem(
+                          value: code,
+                          child: Text(_languagesNames[code]!),
+                        );
+                      }).toList(),
+                      onChanged: (v) => setState(() => _targetLang = v),
+                      validator: (v) => v == null ? 'Please select' : null,
                     ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Container(
-              width: double.infinity,
-              color: Colors.black12,
-              child: InteractiveViewer(
-                child: _translatedImage != null
-                    ? Image.memory(
-                        _translatedImage!,
-                        fit: BoxFit.contain,
-                      )
-                    : _selectedImage != null
-                        ? Image.file(
-                            _selectedImage!,
-                            fit: BoxFit.contain,
-                          )
-                        : const Center(child: Text("No image selected.")),
+                  ),
+                ],
               ),
             ),
-          ),
-          if (_isLoading)
-            const Padding(
-              padding: EdgeInsets.all(8.0),
-              child: CircularProgressIndicator(),
-            ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton(
-                  onPressed: _selectedImage == null ? _pickImage : _removeImage,
-                  child: Text(
-                      _selectedImage == null ? "Pick Image" : "Remove Image"),
+
+            // -- IMAGE VIEWER --
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                color: Colors.black12,
+                child: InteractiveViewer(
+                  child: _originalImageUrl != null && _whiteImageUrl != null
+                      ? Image.network(
+                          _showWhite ? _whiteImageUrl! : _originalImageUrl!,
+                          fit: BoxFit.contain,
+                          key: ValueKey(_showWhite),
+                        )
+                      : _selectedImage != null
+                          ? Image.file(
+                              _selectedImage!,
+                              fit: BoxFit.contain,
+                            )
+                          : const Center(child: Text("No image selected.")),
                 ),
-                ElevatedButton(
-                  onPressed: _selectedImage == null ? _useCamera : _sendImage,
-                  child: Text(_selectedImage == null ? "Use Camera" : "Send"),
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+
+            // -- TOGGLE CHECKBOX --
+            if (_originalImageUrl != null && _whiteImageUrl != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text("White BG"),
+                    Checkbox(
+                      value: _showWhite,
+                      onChanged: (v) => setState(() => _showWhite = v ?? false),
+                    ),
+                  ],
+                ),
+              ),
+
+            // -- LOADING INDICATOR --
+            if (_isLoading)
+              const Padding(
+                padding: EdgeInsets.all(8.0),
+                child: CircularProgressIndicator(),
+              ),
+
+            // -- BUTTONS ROW --
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton(
+                    onPressed:
+                        _selectedImage == null ? _pickImage : _removeImage,
+                    child: Text(
+                      _selectedImage == null ? "Pick Image" : "Remove Image",
+                    ),
+                  ),
+                  ElevatedButton(
+                    onPressed: _selectedImage == null
+                        ? _useCamera
+                        : () {
+                            // validate languages before sending
+                            if (_formKey.currentState!.validate()) {
+                              _sendImage();
+                            }
+                          },
+                    child: Text(
+                      _selectedImage == null ? "Use Camera" : "Send",
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

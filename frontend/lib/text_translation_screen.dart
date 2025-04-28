@@ -6,6 +6,16 @@ import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 
+const Map<String, String> _languagesNames = {
+  'hr': 'Croatian',
+  'en': 'English',
+  'es': 'Spanish',
+  'de': 'German',
+  'fr': 'French',
+  'nl': 'Dutch',
+  'it': 'Italian',
+};
+
 class TextTranslationScreen extends StatefulWidget {
   const TextTranslationScreen({super.key});
 
@@ -14,14 +24,15 @@ class TextTranslationScreen extends StatefulWidget {
 }
 
 class _TextTranslationScreenState extends State<TextTranslationScreen> {
+  final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
   final TextEditingController _inputController = TextEditingController();
   final TextEditingController _outputController = TextEditingController();
   String _translatedText = "";
-  final List<String> _languages = ['hr', 'en', 'es', 'de', 'fr', 'nl', 'it'];
+  final _languages = _languagesNames.keys.toList();
   var logger = Logger();
-  String _sourceLang = 'hr';
-  String _targetLang = 'en';
+  String? _sourceLang;
+  String? _targetLang;
 
   final _baseUrl = dotenv.env['API_URL']!;
 
@@ -110,117 +121,249 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
     });
   }
 
+  // @override
+  // Widget build(BuildContext context) {
+  //   return Scaffold(
+  //     resizeToAvoidBottomInset: false,
+  //     appBar: AppBar(
+  //       title: const Text("Translate Text"),
+  //     ),
+  //     body: SingleChildScrollView(
+  //       padding: const EdgeInsets.all(16.0),
+  //       child: Column(
+  //         crossAxisAlignment: CrossAxisAlignment.start,
+  //         children: <Widget>[
+  //           Padding(
+  //             padding: const EdgeInsets.all(8.0),
+  //             child: Row(
+  //               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+  //               children: [
+  //                 Column(
+  //                   children: [
+  //                     const Text("Source Language"),
+  //                     DropdownButton<String>(
+  //                       value: _sourceLang,
+  //                       items: _languages
+  //                           .map((lang) => DropdownMenuItem(
+  //                                 value: lang,
+  //                                 child: Text(lang.toUpperCase()),
+  //                               ))
+  //                           .toList(),
+  //                       onChanged: (value) {
+  //                         if (value != null) {
+  //                           setState(() {
+  //                             _sourceLang = value;
+  //                           });
+  //                           if (_inputController.text.isNotEmpty) {
+  //                             _onInputChanged(_inputController.text);
+  //                           }
+  //                         }
+  //                       },
+  //                     ),
+  //                   ],
+  //                 ),
+  //                 const SizedBox(width: 10),
+  //                 IconButton(
+  //                   icon: const Icon(Icons.swap_horiz),
+  //                   onPressed: () async {
+  //                     setState(() {
+  //                       final temp = _sourceLang;
+  //                       _sourceLang = _targetLang;
+  //                       _targetLang = temp;
+  //                     });
+  //                     final text = _inputController.text;
+  //                     if (text.isNotEmpty) {
+  //                       _debounce?.cancel();
+  //                       await _sendText();
+  //                     }
+  //                   },
+  //                 ),
+  //                 const SizedBox(width: 10),
+  //                 Column(
+  //                   children: [
+  //                     const Text("Target Language"),
+  //                     DropdownButton<String>(
+  //                       value: _targetLang,
+  //                       items: _languages
+  //                           .map((lang) => DropdownMenuItem(
+  //                                 value: lang,
+  //                                 child: Text(lang.toUpperCase()),
+  //                               ))
+  //                           .toList(),
+  //                       onChanged: (value) {
+  //                         if (value != null) {
+  //                           setState(() {
+  //                             _targetLang = value;
+  //                           });
+  //                           if (_inputController.text.isNotEmpty) {
+  //                             _onInputChanged(_inputController.text);
+  //                           }
+  //                         }
+  //                       },
+  //                     ),
+  //                   ],
+  //                 ),
+  //               ],
+  //             ),
+  //           ),
+  //           Padding(
+  //             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+  //             child: TextField(
+  //               controller: _inputController,
+  //               onChanged: _onInputChanged,
+  //               maxLines: 6,
+  //               decoration: const InputDecoration(
+  //                 border: OutlineInputBorder(),
+  //                 hintText: 'Enter text',
+  //               ),
+  //             ),
+  //           ),
+  //           Padding(
+  //             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+  //             child: TextField(
+  //               controller: _outputController,
+  //               readOnly: true,
+  //               maxLines: 6,
+  //               decoration: const InputDecoration(
+  //                 border: OutlineInputBorder(),
+  //                 hintText: 'Translated text appears here',
+  //               ),
+  //             ),
+  //           ),
+  //           if (_isLoading) const Center(child: CircularProgressIndicator()),
+  //         ],
+  //       ),
+  //     ),
+  //   );
+  // }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      appBar: AppBar(
-        title: const Text("Translate Text"),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  Column(
-                    children: [
-                      const Text("Source Language"),
-                      DropdownButton<String>(
+      appBar: AppBar(title: const Text("Translate Text")),
+      body: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              // ───── Language Row ─────
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
                         value: _sourceLang,
-                        items: _languages
-                            .map((lang) => DropdownMenuItem(
-                                  value: lang,
-                                  child: Text(lang.toUpperCase()),
-                                ))
-                            .toList(),
+                        decoration: InputDecoration(
+                          labelText: 'From',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: _languages.map((code) {
+                          return DropdownMenuItem(
+                            value: code,
+                            child: Text(_languagesNames[code]!),
+                          );
+                        }).toList(),
                         onChanged: (value) {
-                          if (value != null) {
-                            setState(() {
-                              _sourceLang = value;
-                            });
-                            if (_inputController.text.isNotEmpty) {
-                              _onInputChanged(_inputController.text);
-                            }
+                          setState(() => _sourceLang = value);
+                          if (_inputController.text.isNotEmpty &&
+                              _formKey.currentState!.validate()) {
+                            _debounce?.cancel();
+                            _onInputChanged(_inputController.text);
                           }
                         },
+                        validator: (value) =>
+                            value == null ? 'Please select' : null,
                       ),
-                    ],
-                  ),
-                  const SizedBox(width: 10),
-                  IconButton(
-                    icon: const Icon(Icons.swap_horiz),
-                    onPressed: () async {
-                      setState(() {
-                        final temp = _sourceLang;
-                        _sourceLang = _targetLang;
-                        _targetLang = temp;
-                      });
-                      final text = _inputController.text;
-                      if (text.isNotEmpty) {
-                        _debounce?.cancel();
-                        await _sendText();
-                      }
-                    },
-                  ),
-                  const SizedBox(width: 10),
-                  Column(
-                    children: [
-                      const Text("Target Language"),
-                      DropdownButton<String>(
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.swap_horiz),
+                      onPressed: () async {
+                        setState(() {
+                          final tmp = _sourceLang;
+                          _sourceLang = _targetLang;
+                          _targetLang = tmp;
+                        });
+                        final text = _inputController.text;
+                        if (text.isNotEmpty &&
+                            _formKey.currentState!.validate()) {
+                          _debounce?.cancel();
+                          await _sendText();
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
                         value: _targetLang,
-                        items: _languages
-                            .map((lang) => DropdownMenuItem(
-                                  value: lang,
-                                  child: Text(lang.toUpperCase()),
-                                ))
-                            .toList(),
+                        decoration: InputDecoration(
+                          labelText: 'To',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: _languages.map((code) {
+                          return DropdownMenuItem(
+                            value: code,
+                            child: Text(_languagesNames[code]!),
+                          );
+                        }).toList(),
                         onChanged: (value) {
-                          if (value != null) {
-                            setState(() {
-                              _targetLang = value;
-                            });
-                            if (_inputController.text.isNotEmpty) {
-                              _onInputChanged(_inputController.text);
-                            }
+                          setState(() => _targetLang = value);
+                          if (_inputController.text.isNotEmpty &&
+                              _formKey.currentState!.validate()) {
+                            _debounce?.cancel();
+                            _onInputChanged(_inputController.text);
                           }
                         },
+                        validator: (value) =>
+                            value == null ? 'Please select' : null,
                       ),
-                    ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // ───── Input TextField ─────
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+                child: TextFormField(
+                  controller: _inputController,
+                  maxLines: 6,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    hintText: 'Enter text',
                   ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
-              child: TextField(
-                controller: _inputController,
-                onChanged: _onInputChanged,
-                maxLines: 6,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  hintText: 'Enter text',
+                  onChanged: (text) {
+                    if (_formKey.currentState!.validate()) {
+                      _debounce?.cancel();
+                      _onInputChanged(text);
+                    }
+                  },
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
-              child: TextField(
-                controller: _outputController,
-                readOnly: true,
-                maxLines: 6,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  hintText: 'Translated text appears here',
+
+              // ───── Output TextField ─────
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+                child: TextFormField(
+                  controller: _outputController,
+                  readOnly: true,
+                  maxLines: 6,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    hintText: 'Translated text appears here',
+                  ),
                 ),
               ),
-            ),
-            if (_isLoading) const Center(child: CircularProgressIndicator()),
-          ],
+
+              // ───── Loading Indicator ─────
+              if (_isLoading) const Center(child: CircularProgressIndicator()),
+            ],
+          ),
         ),
       ),
     );
