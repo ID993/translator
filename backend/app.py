@@ -14,13 +14,13 @@ from utils.hahsers import generate_image_cache_key, generate_audio_cache_key, ge
 app = Flask(__name__)
 CORS(app)
 
-UPLOAD_FOLDER = './uploads'
-ORIGINAL_DIR = './uploads/original'
-TRANSLATED_DIR = './uploads/translate'
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['ORIGINAL_DIR'] = ORIGINAL_DIR
-app.config['TRANSLATED_DIR'] = TRANSLATED_DIR
-cache = Cache(app, config={'CACHE_TYPE': 'SimpleCache'})
+UPLOAD_FOLDER = "./uploads"
+ORIGINAL_DIR = "./uploads/original"
+TRANSLATED_DIR = "./uploads/translate"
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+app.config["ORIGINAL_DIR"] = ORIGINAL_DIR
+app.config["TRANSLATED_DIR"] = TRANSLATED_DIR
+cache = Cache(app, config={"CACHE_TYPE": "SimpleCache"})
 
 
 def verify_firebase_token(token):
@@ -31,12 +31,12 @@ def verify_firebase_token(token):
         return None
 
 
-@app.route('/')
+@app.route("/")
 def home():
     return "Backend is set up and running!"
 
 
-@app.route('/protected', methods=['GET'])
+@app.route("/protected", methods=["GET"])
 def protected():
     token = request.headers.get("Authorization")
     data = request.headers.get("data")
@@ -53,36 +53,36 @@ def protected():
     return jsonify({"message": "Access granted!", "user": user_info, "data": data}), 200
 
 
-@app.route('/upload', methods=['GET', 'POST'])
+@app.route("/upload", methods=["GET", "POST"])
 def upload():
     token = request.headers.get("Authorization")
 
     if not token:
         return jsonify({"error": "Unauthorized"}), 401
 
-    if 'file' not in request.files:
+    if "file" not in request.files:
         return jsonify({"error": "No file provided"}), 400
 
-    file = request.files['file']
-    if file.filename == '':
+    file = request.files["file"]
+    if file.filename == "":
         return jsonify({"error": "No selected file"}), 400
 
     filename = secure_filename(file.filename)
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
     file.save(filepath)
 
     return jsonify({"message": "File uploaded successfully", "filename": filename})
 
 
-@app.route('/translate-image', methods=['POST', ])
+@app.route("/translate-image", methods=["POST", ])
 def translate_image():
-    if 'file' not in request.files:
+    if "file" not in request.files:
         return jsonify({"error": "No file provided"}), 400
 
-    file = request.files['file']
-    src_lang = request.form.get('src_lang', 'hr')
-    tgt_lang = request.form.get('tgt_lang', 'en')
-    model = request.form.get('model', 'ml')
+    file = request.files["file"]
+    src_lang = request.form.get("src_lang", "hr")
+    tgt_lang = request.form.get("tgt_lang", "en")
+    model = request.form.get("model", "ml")
 
     original_dir = "./uploads/original"
     os.makedirs(original_dir, exist_ok=True)
@@ -118,16 +118,16 @@ def translate_image():
     return send_file(output_path, mimetype="image/png")
 
 
-@app.route('/translate-audio', methods=['POST', 'GET'])
+@app.route("/translate-audio", methods=["POST", "GET"])
 def translate_audio():
 
-    if 'file' not in request.files:
+    if "file" not in request.files:
         return jsonify({"error": "No file provided"}), 400
 
-    file = request.files['file']
-    src_lang = request.form.get('src_lang', 'hr')
-    tgt_lang = request.form.get('tgt_lang', 'en')
-    model = request.form.get('model', 'ml')
+    file = request.files["file"]
+    src_lang = request.form.get("src_lang", "hr")
+    tgt_lang = request.form.get("tgt_lang", "en")
+    model = request.form.get("model", "ml")
 
     original_audio_dir = "./audio_uploads/original"
     os.makedirs(original_audio_dir, exist_ok=True)
@@ -165,18 +165,18 @@ def translate_audio():
     return translated_audio_text
 
 
-@app.route('/translate-text', methods=['POST', 'GET'])
+@app.route("/translate-text", methods=["POST", "GET"])
 def translate_text():
     data = request.get_json()
     print("Received JSON data:", data)
 
-    if not data or 'text' not in data:
+    if not data or "text" not in data:
         return jsonify({"error": "No text provided"}), 400
 
-    text = data.get('text')
-    src_lang = data.get('src_lang', 'hr')
-    tgt_lang = data.get('tgt_lang', 'en')
-    model = data.get('model', 'ml')
+    text = data.get("text")
+    src_lang = data.get("src_lang", "hr")
+    tgt_lang = data.get("tgt_lang", "en")
+    model = data.get("model", "ml")
 
     cache_key = generate_text_cache_key(text, src_lang, tgt_lang)
 
@@ -191,5 +191,5 @@ def translate_text():
     return translated_text
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)

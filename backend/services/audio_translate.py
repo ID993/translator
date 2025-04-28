@@ -20,10 +20,10 @@ def translate_audio_file(audio_file, src_lang, tgt_lang, model_name):
 
     path, file = audio_file.split('\\')
 
-    sound = AudioSegment.from_file(audio_file, format='m4a')
+    sound = AudioSegment.from_file(audio_file, format="m4a")
     base, ext = file.split('.')
     wav_file_name = f"{base}.wav"
-    wav_audio = sound.export(wav_audio_dir+wav_file_name, format='wav')
+    wav_audio = sound.export(wav_audio_dir+wav_file_name, format="wav")
 
     audio_text = extract_text_from_audio(wav_audio, src_lang)
     translated_speech = translate_input_text(

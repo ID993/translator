@@ -4,6 +4,7 @@ import 'package:logger/web.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -30,10 +31,12 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
   final detection =
       Settings.getValue<String>("detection_mode", defaultValue: "automatic");
 
-  final List<String> _languages = ['hr', 'en', 'es', 'de', 'fr', 'nl'];
+  final List<String> _languages = ['hr', 'en', 'es', 'de', 'fr', 'nl', 'it'];
 
   String _sourceLang = 'hr';
   String _targetLang = 'en';
+
+  final _baseUrl = dotenv.env['API_URL']!;
 
   Future<void> _startRecording() async {
     if (await _recorder.hasPermission()) {
@@ -107,9 +110,8 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
       _isLoading = true;
     });
     try {
-      var uri = Uri.parse("http://192.168.0.157:5000/translate-audio");
-      // var uri = Uri.parse(
-      //     "https://3a44-89-164-230-31.ngrok-free.app/translate-audio");
+      logger.d(_baseUrl);
+      var uri = Uri.parse("$_baseUrl/translate-audio");
       var request = http.MultipartRequest('POST', uri);
       logger.d(_recordFilePath);
       request.files
@@ -132,6 +134,7 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
         });
       } else {
         if (!mounted) return;
+        logger.d("Translation failed with status: ${response.statusCode}");
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content:

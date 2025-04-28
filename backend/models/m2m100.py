@@ -1,7 +1,12 @@
-from transformers import M2M100ForConditionalGeneration, M2M100Tokenizer, pipeline
+from transformers import M2M100ForConditionalGeneration, M2M100Tokenizer
+# from transformers import MBartForConditionalGeneration, MBart50TokenizerFast
+# OR
+# from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
+# tokenizer = AutoTokenizer.from_pretrained("facebook/mbart-large-50-many-to-many-mmt")
+# model = AutoModelForSeq2SeqLM.from_pretrained("facebook/mbart-large-50-many-to-many-mmt")
 
-_MODEL_NAME = "facebook/m2m100_418M"
+_MODEL_NAME = "facebook/m2m100_418M"  # m2m100_1.2B
 _tokenizer = None
 _model = None
 

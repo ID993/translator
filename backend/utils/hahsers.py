@@ -6,7 +6,7 @@ def generate_hash(data):
 
 
 def generate_text_cache_key(text, src_lang, tgt_lang):
-    return f"translation_text_{src_lang}_{tgt_lang}_{hashlib.md5(text.encode('utf-8')).hexdigest()}"
+    return f"translation_text_{src_lang}_{tgt_lang}_{hashlib.md5(text.encode("utf-8")).hexdigest()}"
 
 
 def generate_image_cache_key(image_bytes, src_lang, tgt_lang):

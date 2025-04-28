@@ -5,7 +5,7 @@ from langdetect import detect
 
 
 LOCAL_DIR = os.path.dirname(__file__)
-MODEL_PATH = os.path.join(LOCAL_DIR, 'models', 'lid.176.bin')
+MODEL_PATH = os.path.join(LOCAL_DIR, "models", "lid.176.bin")
 
 model = fasttext.load_model(MODEL_PATH)
 
