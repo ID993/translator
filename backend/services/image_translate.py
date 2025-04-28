@@ -26,9 +26,20 @@ def translate_image_texts(texts, src_lang, tgt_lang):
     return [tokenizer.decode(t, skip_special_tokens=True) for t in generated_tokens]
 
 
+def get_font_size(translated_lines, merged_boxes):
+    heights = []
+    for (translated_text, box) in zip(translated_lines, merged_boxes):
+        x, y, w, h = map(int, box)
+        heights.append(h)
+
+    font_size = (sum(heights)/len(heights))*0.75
+    print(f"\nFONT SIZE: {font_size}\n")
+    return font_size
+
+
 def erase_and_replace_text(image, src_lang, tgt_lang, model):
-    # word_regions = extract_word_boxes_easy_ocr(image)
-    word_regions = extract_word_boxes_pytesseract(image)
+    word_regions = extract_word_boxes_easy_ocr(image)
+    # word_regions = extract_word_boxes_pytesseract(image)
 
     lines = group_boxes_to_lines(word_regions, y_threshold=30)
 
@@ -48,6 +59,18 @@ def erase_and_replace_text(image, src_lang, tgt_lang, model):
         print("\nUSING LONG LANGUAGE MODEL\n")
         translated_lines = llm_translation(line_texts, src_lang, tgt_lang)
 
+    heights = []
+    for (translated_text, box) in zip(translated_lines, merged_boxes):
+        x, y, w, h = map(int, box)
+        print(h)
+        heights.append(h)
+
+    font_size = get_font_size(translated_lines, merged_boxes)
+
+    white_image = image.copy()
+    draw_white = ImageDraw.Draw(white_image)
+    draw_white.rectangle([(0, 0), white_image.size], fill="white")
+
     draw = ImageDraw.Draw(image)
     for (translated_text, box) in zip(translated_lines, merged_boxes):
         x, y, w, h = map(int, box)
@@ -55,17 +78,7 @@ def erase_and_replace_text(image, src_lang, tgt_lang, model):
         blurred_region = region.filter(ImageFilter.GaussianBlur(radius=15))
         image.paste(blurred_region, (x, y))
 
-        font_size = max(10, int(h))
-
-        font_path = "arial.ttf"
-        # if os.path.exists(font_path):
-        #     print("font exists")
-        #     font = ImageFont.truetype(font_path, font_size)
-        # else:
-        #     print("font not exists")
-        #     font = ImageFont.load_default(size=24)
-
-        font = ImageFont.truetype(font_path, font_size)
+        font = ImageFont.truetype("arial.ttf", font_size)
         bbox_text = font.getbbox(translated_text)
         text_width = bbox_text[2] - bbox_text[0]
         text_height = bbox_text[3] - bbox_text[1]
@@ -74,8 +87,9 @@ def erase_and_replace_text(image, src_lang, tgt_lang, model):
         text_y = y + (h - text_height) / 2
 
         draw.text((text_x, text_y), translated_text, fill="black", font=font)
-
-    return image
+        draw_white.text((text_x, text_y), translated_text,
+                        fill="black", font=font)
+    return image, white_image
 
 
 def correct_image_orientation(image):
@@ -105,12 +119,16 @@ def translate_image_file(file, src_lang, tgt_lang, model):
 
     image = file.convert("RGB")
 
-    translated_image = erase_and_replace_text(image, src_lang, tgt_lang, model)
+    translated_image_original, translated_image_white = erase_and_replace_text(
+        image, src_lang, tgt_lang, model)
 
-    img_io = BytesIO()
-    translated_image.save(img_io, format="PNG")
-    img_io.seek(0)
-    return img_io
+    img_io_original = BytesIO()
+    img_io_white = BytesIO()
+    translated_image_original.save(img_io_original, format="PNG")
+    translated_image_white.save(img_io_white, format="PNG")
+    img_io_original.seek(0)
+    img_io_white.seek(0)
+    return img_io_original, img_io_white
 
 
 # def translate_input_text(text, src_lang, tgt_lang):

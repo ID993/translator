@@ -1,6 +1,6 @@
 import os
 from firebase_config import firebase_admin
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
 from firebase_admin import auth
 from werkzeug.utils import secure_filename
@@ -74,7 +74,12 @@ def upload():
     return jsonify({"message": "File uploaded successfully", "filename": filename})
 
 
-@app.route("/translate-image", methods=["POST", ])
+@app.route("/uploads/translate/<path:fname>")
+def serve_translated(fname):
+    return send_from_directory("uploads/translate", fname)
+
+
+@app.route("/translate-image", methods=["POST"])
 def translate_image():
     if "file" not in request.files:
         return jsonify({"error": "No file provided"}), 400
@@ -82,40 +87,83 @@ def translate_image():
     file = request.files["file"]
     src_lang = request.form.get("src_lang", "hr")
     tgt_lang = request.form.get("tgt_lang", "en")
-    model = request.form.get("model", "ml")
+    model = request.form.get("model",    "ml")
 
+    # 1) save original upload
     original_dir = "./uploads/original"
     os.makedirs(original_dir, exist_ok=True)
     base, ext = os.path.splitext(file.filename)
-    original_filename = f"{base}{ext}"
-    original_path = os.path.join(original_dir, original_filename)
+    original_path = os.path.join(original_dir, file.filename)
     file.save(original_path)
 
-    image = Image.open(original_path)
+    # 2) translate (returns two BytesIO: [org_img_io, white_img_io])
+    img = Image.open(original_path)
+    img = correct_image_orientation(img)
+    org_io, wht_io = translate_image_file(img, src_lang, tgt_lang, model)
 
-    corrected_image = correct_image_orientation(image)
-    cache_key = generate_image_cache_key(original_path, src_lang, tgt_lang)
+    # 3) write both out
+    out_dir = "./uploads/translate"
+    os.makedirs(out_dir, exist_ok=True)
+    org_name = f"{base}_translated_org_{src_lang}-{tgt_lang}.png"
+    wht_name = f"{base}_translated_wht_{src_lang}-{tgt_lang}.png"
+    org_path = os.path.join(out_dir, org_name)
+    wht_path = os.path.join(out_dir, wht_name)
 
-    cached_translation = cache.get(cache_key)
-    if cached_translation:
-        print(f"\nCache: {cached_translation}\n")
-        return send_file(cached_translation, mimetype="image/png")
+    with open(org_path, "wb") as f:
+        f.write(org_io.getbuffer())
+    with open(wht_path, "wb") as f:
+        f.write(wht_io.getbuffer())
 
-    translated_img_io = translate_image_file(
-        corrected_image, src_lang, tgt_lang, model)
+    # 4) serve via URL (ngrok or your domain)
+    public_base = request.url_root.rstrip("/") + "/uploads/translate"
+    resp = {
+        "original_image_url": f"{public_base}/{org_name}",
+        "white_image_url":    f"{public_base}/{wht_name}"
+    }
+    return jsonify(resp)
 
-    base, ext = os.path.splitext(file.filename)
-    output_dir = "./uploads/translate"
-    os.makedirs(output_dir, exist_ok=True)
-    output_filename = f"{base}_translated_{src_lang}-{tgt_lang}{ext}"
-    output_path = os.path.join(output_dir, output_filename)
+# @app.route("/translate-image", methods=["POST", ])
+# def translate_image():
+#     if "file" not in request.files:
+#         return jsonify({"error": "No file provided"}), 400
 
-    with open(output_path, "wb") as out_file:
-        out_file.write(translated_img_io.getbuffer())
+#     file = request.files["file"]
+#     src_lang = request.form.get("src_lang", "hr")
+#     tgt_lang = request.form.get("tgt_lang", "en")
+#     model = request.form.get("model", "ml")
 
-    cache.set(cache_key, output_path, timeout=6)
+#     original_dir = "./uploads/original"
+#     os.makedirs(original_dir, exist_ok=True)
+#     base, ext = os.path.splitext(file.filename)
+#     original_filename = f"{base}{ext}"
+#     original_path = os.path.join(original_dir, original_filename)
+#     file.save(original_path)
 
-    return send_file(output_path, mimetype="image/png")
+#     image = Image.open(original_path)
+
+#     corrected_image = correct_image_orientation(image)
+#     cache_key = generate_image_cache_key(original_path, src_lang, tgt_lang)
+
+#     cached_translation = cache.get(cache_key)
+#     if cached_translation:
+#         print(f"\nCache: {cached_translation}\n")
+#         return send_file(cached_translation, mimetype="image/png")
+
+#     translated_img_io = translate_image_file(
+#         corrected_image, src_lang, tgt_lang, model)
+
+#     base, ext = os.path.splitext(file.filename)
+#     output_dir = "./uploads/translate"
+#     os.makedirs(output_dir, exist_ok=True)
+#     output_filename = f"{base}_translated_{src_lang}-{tgt_lang}{ext}"
+#     output_path = os.path.join(output_dir, output_filename)
+
+#     with open(output_path, "wb") as out_file:
+#         out_file.write(translated_img_io[0].getbuffer())
+
+#     cache.set(cache_key, output_path, timeout=6)
+
+#     return send_file(output_path, mimetype="image/png")
 
 
 @app.route("/translate-audio", methods=["POST", "GET"])
