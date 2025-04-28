@@ -27,13 +27,9 @@ def translate_image_texts(texts, src_lang, tgt_lang):
 
 
 def erase_and_replace_text(image, src_lang, tgt_lang, model):
-    """
-    Groups OCR boxes into lines, translates each line,
-    erases the original text, and overlays the translated text.
-    """
+    # word_regions = extract_word_boxes_easy_ocr(image)
+    word_regions = extract_word_boxes_pytesseract(image)
 
-    word_regions = extract_word_boxes_easy_ocr(image)
-    # Group words into lines (sentence-level) based on y coordinate.
     lines = group_boxes_to_lines(word_regions, y_threshold=30)
 
     line_texts = []
@@ -52,21 +48,16 @@ def erase_and_replace_text(image, src_lang, tgt_lang, model):
         print("\nUSING LONG LANGUAGE MODEL\n")
         translated_lines = llm_translation(line_texts, src_lang, tgt_lang)
 
-    # Draw the translated text on the image.
     draw = ImageDraw.Draw(image)
     for (translated_text, box) in zip(translated_lines, merged_boxes):
         x, y, w, h = map(int, box)
-        # Crop the region where the text is located.
         region = image.crop((x, y, x + w, y + h))
-        # Apply a Gaussian blur to the cropped region (adjust radius as needed).
         blurred_region = region.filter(ImageFilter.GaussianBlur(radius=15))
-        # Paste the blurred region back into the original image.
         image.paste(blurred_region, (x, y))
 
-        # Determine a font size based on the height of the merged box.
         font_size = max(10, int(h))
 
-        font_path = "arial.ttf"  # Adjust font path if needed.
+        font_path = "arial.ttf"
         # if os.path.exists(font_path):
         #     print("font exists")
         #     font = ImageFont.truetype(font_path, font_size)
@@ -74,13 +65,11 @@ def erase_and_replace_text(image, src_lang, tgt_lang, model):
         #     print("font not exists")
         #     font = ImageFont.load_default(size=24)
 
-        # Use font.getbbox to measure text dimensions.
         font = ImageFont.truetype(font_path, font_size)
         bbox_text = font.getbbox(translated_text)
         text_width = bbox_text[2] - bbox_text[0]
         text_height = bbox_text[3] - bbox_text[1]
 
-        # Center the translated text within the merged box.
         text_x = x  # + (w - text_width)
         text_y = y + (h - text_height) / 2
 
@@ -96,7 +85,7 @@ def correct_image_orientation(image):
             return image
 
         for orientation in ExifTags.TAGS.keys():
-            if ExifTags.TAGS[orientation] == 'Orientation':
+            if ExifTags.TAGS[orientation] == "Orientation":
                 break
         exif_dict = dict(exif.items())
         orientation_value = exif_dict.get(orientation, None)

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:saver_gallery/saver_gallery.dart';
@@ -27,10 +28,12 @@ class _ImageTranslationScreenState extends State<ImageTranslationScreen> {
   final detection =
       Settings.getValue<String>("detection_mode", defaultValue: "automatic");
 
-  final List<String> _languages = ['hr', 'en', 'es', 'de', 'fr', 'nl'];
+  final List<String> _languages = ['hr', 'en', 'es', 'de', 'fr', 'nl', 'it'];
 
   String _sourceLang = 'hr';
   String _targetLang = 'en';
+
+  final _baseUrl = dotenv.env['API_URL']!;
 
   Future<void> _pickImage() async {
     final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
@@ -113,10 +116,9 @@ class _ImageTranslationScreenState extends State<ImageTranslationScreen> {
       _isLoading = true;
     });
     try {
+      logger.d(_baseUrl);
       logger.d(_selectedImage!.path);
-      var uri = Uri.parse("http://192.168.0.157:5000/translate-image");
-      // var uri = Uri.parse(
-      //     "https://3a44-89-164-230-31.ngrok-free.app/translate-image");
+      var uri = Uri.parse("$_baseUrl/translate-image");
 
       var request = http.MultipartRequest('POST', uri);
       request.files
@@ -135,6 +137,7 @@ class _ImageTranslationScreenState extends State<ImageTranslationScreen> {
         });
       } else {
         if (!mounted) return;
+        logger.d("Translation failed with status: ${response.statusCode}");
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content:
@@ -144,6 +147,7 @@ class _ImageTranslationScreenState extends State<ImageTranslationScreen> {
       }
     } catch (e) {
       if (!mounted) return;
+      logger.d("Error during translation: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text("Error during translation: $e"),
@@ -162,6 +166,7 @@ class _ImageTranslationScreenState extends State<ImageTranslationScreen> {
     setState(() {
       _selectedImage = null;
       _translatedImage = null;
+      _isLoading = false;
     });
   }
 

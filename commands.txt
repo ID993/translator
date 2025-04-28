@@ -1,4 +1,4 @@
-ngrok http http://localhost:8080 - start ngrok
+ngrok http http://localhost:5000 - start ngrok
 python app.py - start backend
 flutter clean - clean build
 flutter pub get - rebuild

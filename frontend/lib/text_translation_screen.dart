@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -17,10 +18,12 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
   final TextEditingController _inputController = TextEditingController();
   final TextEditingController _outputController = TextEditingController();
   String _translatedText = "";
-  final List<String> _languages = ['hr', 'en', 'es', 'de', 'fr', 'nl'];
+  final List<String> _languages = ['hr', 'en', 'es', 'de', 'fr', 'nl', 'it'];
   var logger = Logger();
   String _sourceLang = 'hr';
   String _targetLang = 'en';
+
+  final _baseUrl = dotenv.env['API_URL']!;
 
   final _model = Settings.getValue<String>("model_type", defaultValue: "ml");
   final detection =
@@ -41,11 +44,8 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
       _isLoading = true;
     });
     try {
-      var uri = Uri.parse("http://192.168.0.157:5000/translate-text");
-
-      // var uri =
-      //     Uri.parse("https://3a44-89-164-230-31.ngrok-free.app/translate-text");
-
+      logger.d(_baseUrl);
+      var uri = Uri.parse("$_baseUrl/translate-text");
       Map<String, dynamic> payload = {
         'text': _inputController.text,
         'src_lang': _sourceLang,
@@ -68,6 +68,7 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
         });
       } else {
         if (!mounted) return;
+        logger.d("Translation failed with status: ${response.statusCode}");
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content:
@@ -77,6 +78,7 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
       }
     } catch (e) {
       if (!mounted) return;
+      logger.d("Error during translation: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text("Error during translation: $e"),

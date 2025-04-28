@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'firebase_options.dart';
 import 'login_screen.dart';
 import 'register_screen.dart';
@@ -18,7 +19,7 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
   await Settings.init(cacheProvider: SharePreferenceCache());
-  // runApp(const MyApp());
+  await dotenv.load();
   runApp(
     ChangeNotifierProvider(
       create: (_) => LocationProvider()..updateTracking(),

@@ -3,22 +3,18 @@ import numpy as np
 import easyocr
 import pytesseract
 
-ocr_reader = easyocr.Reader(['hr', 'en', 'es', 'de', 'fr', 'nl'], gpu=False)
+ocr_reader = easyocr.Reader(
+    ["hr", "en", "es", "de", "fr", "nl", "it"], gpu=False)
 
 
 def extract_word_boxes_easy_ocr(image):
-    """
-    Converts a PIL image to a NumPy array and runs OCR.
-    Returns a list of tuples: (detected_text, (x, y, width, height))
-    """
     image_np = np.array(image)
     results = ocr_reader.readtext(image_np)
     text_regions = []
     for res in results:
-        word = res[1]  # Detected text
-        bbox = res[0]  # Bounding box as list of 4 points
+        word = res[1]
+        bbox = res[0]
         if word.strip():
-            # Use top-left and bottom-right points to calculate box dimensions.
             x, y = bbox[0]
             x2, y2 = bbox[2]
             text_regions.append((word, (x, y, x2 - x, y2 - y)))
@@ -26,34 +22,24 @@ def extract_word_boxes_easy_ocr(image):
 
 
 def extract_word_boxes_pytesseract(image):
-    """
-    Uses pytesseract to extract text and bounding boxes from a PIL image.
-    Returns a list of tuples: (detected_text, (x, y, width, height))
-    """
     data = pytesseract.image_to_data(
         image, output_type=pytesseract.Output.DICT)
     text_regions = []
-    n_boxes = len(data['text'])
+    n_boxes = len(data["text"])
     for i in range(n_boxes):
-        text = data['text'][i]
+        text = data["text"][i]
         if text.strip():
-            x = data['left'][i]
-            y = data['top'][i]
-            w = data['width'][i]
-            h = data['height'][i]
+            x = data["left"][i]
+            y = data["top"][i]
+            w = data["width"][i]
+            h = data["height"][i]
             text_regions.append((text, (x, y, w, h)))
 
     return text_regions
 
 
 def group_boxes_to_lines(text_regions, y_threshold):
-    """
-    Groups individual OCR boxes (word-level) into lines (sentence-level) based on their y coordinate.
-    text_regions: list of tuples (detected_text, (x, y, w, h))
-    y_threshold: maximum difference in y to consider boxes as part of the same line.
-    Returns a list of lines, where each line is a list of text_regions.
-    """
-    # Sort boxes by their y-coordinate (top of the box)
+
     text_regions.sort(key=lambda region: region[1][1])
 
     lines = []
@@ -79,11 +65,7 @@ def group_boxes_to_lines(text_regions, y_threshold):
 
 
 def merge_line_boxes(line_regions):
-    """
-    Given a list of OCR regions (words) from one line, merge them into one bounding box.
-    Returns a tuple: (merged_text, (x, y, merged_width, merged_height))
-    """
-    # Sort regions in the line by their x-coordinate.
+
     line_regions.sort(key=lambda region: region[1][0])
     texts = [region[0] for region in line_regions]
     merged_text = " ".join(texts)
