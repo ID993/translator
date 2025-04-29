@@ -1,5 +1,6 @@
 import 'dart:io';
-import 'dart:typed_data';
+import 'package:provider/provider.dart';
+import './location_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:image_picker/image_picker.dart';
@@ -10,6 +11,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:logger/logger.dart';
 import 'dart:convert';
+import './constants.dart';
 
 const Map<String, String> _languagesNames = {
   'hr': 'Croatian',
@@ -35,9 +37,18 @@ class _ImageTranslationScreenState extends State<ImageTranslationScreen> {
   final ImagePicker _picker = ImagePicker();
   var logger = Logger();
 
-  final _model = Settings.getValue<String>("model_type", defaultValue: "ml");
   final detection =
       Settings.getValue<String>("detection_mode", defaultValue: "automatic");
+
+  String? get engine => Settings.getValue<String>(
+        kModelTypeKey,
+        defaultValue: 'ml',
+      );
+
+  String? get model => (engine == 'ml')
+      ? Settings.getValue<String>(kMlModelKey,
+          defaultValue: 'facebook/m2m100_1.2B')
+      : Settings.getValue<String>(kLlmModelKey, defaultValue: 'chatgpt');
 
   final _languages = _languagesNames.keys.toList();
 
@@ -123,13 +134,15 @@ class _ImageTranslationScreenState extends State<ImageTranslationScreen> {
     setState(() => _isLoading = true);
 
     try {
+      final composite = '${engine}_:_$model';
+      logger.d("COMPOSITE: $composite");
       var uri = Uri.parse("$_baseUrl/translate-image");
       var req = http.MultipartRequest('POST', uri)
         ..files.add(
             await http.MultipartFile.fromPath('file', _selectedImage!.path))
         ..fields['src_lang'] = _sourceLang!
         ..fields['tgt_lang'] = _targetLang!
-        ..fields['model'] = _model!;
+        ..fields['composite'] = composite;
 
       var res = await req.send();
 
@@ -168,6 +181,10 @@ class _ImageTranslationScreenState extends State<ImageTranslationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (detection == "location") {
+      _sourceLang = Provider.of<LocationProvider>(context).language;
+    }
+    logger.d("LANG: $_sourceLang");
     return Scaffold(
       appBar: AppBar(title: const Text("Translate Image")),
       body: Form(

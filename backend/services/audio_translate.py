@@ -14,7 +14,7 @@ def extract_text_from_audio(audio_file, src_lang):
     return speech_to_text
 
 
-def translate_audio_file(audio_file, src_lang, tgt_lang, model_name):
+def translate_audio_file(audio_file, src_lang, tgt_lang, composite):
     print(f"\nRECIEVED AUDIO FILE: {audio_file}\n")
     wav_audio_dir = "./audio_uploads/WAV/"
 
@@ -27,6 +27,6 @@ def translate_audio_file(audio_file, src_lang, tgt_lang, model_name):
 
     audio_text = extract_text_from_audio(wav_audio, src_lang)
     translated_speech = translate_input_text(
-        audio_text, src_lang, tgt_lang, model_name)
+        audio_text, src_lang, tgt_lang, composite)
     print(translated_speech)
     return translated_speech

@@ -1,11 +1,12 @@
 import torch
-from services.llm_translate import llm_translation
+from services.openai_llm import openai_translation
+from services.anthropic_llm import anthropic_translation
 from models.m2m100 import get_model, get_tokenizer
 
 
-def ml_translate(texts, src_lang, tgt_lang):
-    tokenizer = get_tokenizer()
-    model = get_model()
+def ml_translate(texts, src_lang, tgt_lang, model_name):
+    tokenizer = get_tokenizer(model_name)
+    model = get_model(model_name)
     tokenizer.src_lang = src_lang
     inputs = tokenizer(texts, return_tensors="pt",
                        padding=True, truncation=True)
@@ -18,12 +19,19 @@ def ml_translate(texts, src_lang, tgt_lang):
     return [tokenizer.decode(t, skip_special_tokens=True) for t in generated_tokens]
 
 
-def translate_input_text(text, src_lang, tgt_lang, model_name):
-    if model_name == "ml":
-        print(f"\nUSING MACHINE LEARNING: {text}, {src_lang}, {tgt_lang}\n")
-        return ml_translate([text], src_lang, tgt_lang)[0]
-    elif model_name == "llm":
-        print(f"\nUSING LONG LANGUAGE MODEL: {text}, {src_lang}, {tgt_lang}\n")
-        return llm_translation(text, src_lang, tgt_lang)
+def translate_input_text(text, src_lang, tgt_lang, composite):
+    print(f"\nCOMPOSITE: {composite}")
+    engine, model_name = composite.split('_:_')
+    print(f"\nMODEL NAME: {engine} {model_name}\n")
+    if engine == "ml":
+        print(
+            f"\nUSING MACHINE LEARNING {model_name}: {text}, {src_lang}, {tgt_lang}\n")
+        return ml_translate([text], src_lang, tgt_lang, model_name)[0]
+    elif engine == "llm" and model_name == "chatgpt":
+        print(f"\nUSING OPEN AI: {text}, {src_lang}, {tgt_lang}\n")
+        return openai_translation(text, src_lang, tgt_lang)
+    elif engine == "llm" and model_name == "claude":
+        print(f"\nUSING ANTHROPIC: {text}, {src_lang}, {tgt_lang}\n")
+        return anthropic_translation(text, src_lang, tgt_lang)
     else:
-        raise ValueError(f"Unknown model {model_name}")
+        raise ValueError(f"Unknown model {composite}")
