@@ -1,20 +1,12 @@
 from dotenv import load_dotenv
 from openai import OpenAI
-import requests
-import os
-from flask import jsonify
+from typing import List
 
 load_dotenv()
 client = OpenAI()
-HF_TOKEN = os.environ.get("HUGGINGFACE_API_TOKEN")
-LLAMA_API_URL = os.environ.get("LLAMA_API_URL")
-
-HEADERS = {
-    "Authorization": f"Bearer {HF_TOKEN}"
-}
 
 
-def llm_translation(text, src_lang, tgt_lang):
+def openai_translation(text, src_lang, tgt_lang):
     response = client.responses.create(
         model="gpt-4o",
         input=[
@@ -46,26 +38,18 @@ def llm_translation(text, src_lang, tgt_lang):
     return cleaned_text
 
 
-def llama_translation(text, src_lang, tgt_lang):
-    prompt = f"Translate this from {src_lang} to {tgt_lang}: {text}"
-    payload = {
-        "inputs": prompt,
-        "parameters": {"max_new_tokens": 1024}
-    }
+def clean_translated_lines(raw_response: str) -> List[str]:
+    lines = raw_response.replace("\\n", "\n").splitlines()
 
-    response = requests.post(LLAMA_API_URL, headers=HEADERS, json=payload)
-    if response.status_code != 200:
-        return jsonify({"error": "Hugging Face API error", "details": response.text}), 500
-
-    try:
-        generated_text = response.json()[0]["generated_text"]
-        translation = generated_text.split(":")[-1].strip()
-        return jsonify({"translation": translation})
-    except Exception as e:
-        return jsonify({"error": "Unexpected API response", "details": str(e)}), 500
+    cleaned: List[str] = []
+    for line in lines:
+        stripped = line.strip("[]'\", \t\r\n")
+        if stripped:
+            cleaned.append(stripped)
+    return cleaned
 
 
-def clean_translated_lines(raw_response):
+def clean_translated_lines2(raw_response):
     translated_lines = raw_response.split("\\n")
     cleaned_lines = []
     for line in translated_lines:

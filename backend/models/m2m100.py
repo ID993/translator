@@ -12,17 +12,17 @@ _tokenizer = None
 _model = None
 
 
-def get_tokenizer():
+def get_tokenizer(model_name):
     global _tokenizer
     if _tokenizer is None:
         # _tokenizer = M2M100Tokenizer.from_pretrained(_MODEL_NAME)
-        _tokenizer = AutoTokenizer.from_pretrained(_MODEL_NAME)
+        _tokenizer = AutoTokenizer.from_pretrained(model_name)
     return _tokenizer
 
 
-def get_model():
+def get_model(model_name):
     global _model
     if _model is None:
         # _model = M2M100ForConditionalGeneration.from_pretrained(_MODEL_NAME)
-        _model = AutoModelForSeq2SeqLM.from_pretrained(_MODEL_NAME)
+        _model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
     return _model

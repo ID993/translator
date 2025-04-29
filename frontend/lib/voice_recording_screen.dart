@@ -8,6 +8,9 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
+import './constants.dart';
+import 'package:provider/provider.dart';
+import './location_provider.dart';
 
 const Map<String, String> _languagesNames = {
   'hr': 'Croatian',
@@ -38,10 +41,18 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
   bool _isLoading = false;
   String? _translatedAudioTtx;
 
-  final _model = Settings.getValue<String>("model_type", defaultValue: "ml");
   final detection =
       Settings.getValue<String>("detection_mode", defaultValue: "automatic");
 
+  String? get engine => Settings.getValue<String>(
+        kModelTypeKey,
+        defaultValue: 'ml',
+      );
+
+  String? get model => (engine == 'ml')
+      ? Settings.getValue<String>(kMlModelKey,
+          defaultValue: 'facebook/m2m100_1.2B')
+      : Settings.getValue<String>(kLlmModelKey, defaultValue: 'chatgpt');
   final _languages = _languagesNames.keys.toList();
 
   String? _sourceLang;
@@ -121,7 +132,8 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
       _isLoading = true;
     });
     try {
-      logger.d(_baseUrl);
+      final composite = '${engine}_:_$model';
+      logger.d("COMPOSITE: $composite");
       var uri = Uri.parse("$_baseUrl/translate-audio");
       var request = http.MultipartRequest('POST', uri);
       logger.d(_recordFilePath);
@@ -129,7 +141,7 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
           .add(await http.MultipartFile.fromPath('file', _recordFilePath!));
       request.fields['src_lang'] = _sourceLang!;
       request.fields['tgt_lang'] = _targetLang!;
-      request.fields['model'] = _model!;
+      request.fields['composite'] = composite;
 
       var response = await request.send();
 
@@ -170,155 +182,12 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
     }
   }
 
-  // @override
-  // Widget build(BuildContext context) {
-  //   String statusText;
-  //   TextStyle statusStyle;
-  //   if (_isRecording) {
-  //     statusText = "Recording...";
-  //     statusStyle = const TextStyle(
-  //         fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red);
-  //   } else if (_recordFilePath != null) {
-  //     statusText = "Recording available";
-  //     statusStyle = const TextStyle(
-  //         fontSize: 16, fontWeight: FontWeight.bold, color: Colors.green);
-  //   } else {
-  //     statusText = "No recording";
-  //     statusStyle = const TextStyle(fontSize: 16);
-  //   }
-
-  //   return Scaffold(
-  //     appBar: AppBar(
-  //       title: const Text('Voice Recorder'),
-  //     ),
-  //     body: SingleChildScrollView(
-  //       padding: const EdgeInsets.all(16.0),
-  //       child: Column(
-  //         crossAxisAlignment: CrossAxisAlignment.stretch,
-  //         children: [
-  //           Padding(
-  //             padding: const EdgeInsets.symmetric(vertical: 8.0),
-  //             child: Row(
-  //               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-  //               children: [
-  //                 Column(
-  //                   children: [
-  //                     const Text("Source Language"),
-  //                     DropdownButton<String>(
-  //                       value: _sourceLang,
-  //                       items: _languages
-  //                           .map(
-  //                             (lang) => DropdownMenuItem(
-  //                               value: lang,
-  //                               child: Text(lang.toUpperCase()),
-  //                             ),
-  //                           )
-  //                           .toList(),
-  //                       onChanged: (value) {
-  //                         if (value != null) {
-  //                           setState(() {
-  //                             _sourceLang = value;
-  //                           });
-  //                         }
-  //                       },
-  //                     ),
-  //                   ],
-  //                 ),
-  //                 const SizedBox(width: 10),
-  //                 IconButton(
-  //                   icon: const Icon(Icons.swap_horiz),
-  //                   onPressed: () async {
-  //                     setState(() {
-  //                       final temp = _sourceLang;
-  //                       _sourceLang = _targetLang;
-  //                       _targetLang = temp;
-  //                     });
-  //                     await _sendRecording();
-  //                   },
-  //                 ),
-  //                 const SizedBox(width: 10),
-  //                 Column(
-  //                   children: [
-  //                     const Text("Target Language"),
-  //                     DropdownButton<String>(
-  //                       value: _targetLang,
-  //                       items: _languages
-  //                           .map(
-  //                             (lang) => DropdownMenuItem(
-  //                               value: lang,
-  //                               child: Text(lang.toUpperCase()),
-  //                             ),
-  //                           )
-  //                           .toList(),
-  //                       onChanged: (value) {
-  //                         if (value != null) {
-  //                           setState(() {
-  //                             _targetLang = value;
-  //                           });
-  //                         }
-  //                       },
-  //                     ),
-  //                   ],
-  //                 ),
-  //               ],
-  //             ),
-  //           ),
-  //           const SizedBox(height: 20),
-  //           Text(
-  //             statusText,
-  //             textAlign: TextAlign.center,
-  //             softWrap: true,
-  //             style: statusStyle,
-  //           ),
-  //           const SizedBox(height: 8),
-  //           if (_translatedAudioTtx != null)
-  //             Text(
-  //               "Translation:\n$_translatedAudioTtx",
-  //               textAlign: TextAlign.center,
-  //               softWrap: true,
-  //               style:
-  //                   const TextStyle(fontSize: 14, fontStyle: FontStyle.italic),
-  //             ),
-  //           const SizedBox(height: 20),
-  //           if (!_isRecording && _recordFilePath == null)
-  //             ElevatedButton(
-  //               onPressed: _startRecording,
-  //               child: const Text("Start Recording"),
-  //             ),
-  //           if (_isRecording)
-  //             ElevatedButton(
-  //               onPressed: _stopRecording,
-  //               child: const Text("Stop Recording"),
-  //             ),
-  //           if (_recordFilePath != null && !_isRecording) ...[
-  //             ElevatedButton(
-  //               onPressed: _isPlaying ? null : _playRecording,
-  //               child: const Text("Play Recording"),
-  //             ),
-  //             const SizedBox(height: 10),
-  //             ElevatedButton(
-  //               onPressed: _deleteRecording,
-  //               child: const Text("Delete Recording"),
-  //             ),
-  //             const SizedBox(height: 10),
-  //             ElevatedButton(
-  //               onPressed: _sendRecording,
-  //               child: const Text("Send Recording"),
-  //             ),
-  //           ],
-  //           const SizedBox(height: 20),
-  //           if (_isLoading)
-  //             const Center(
-  //               child: CircularProgressIndicator(),
-  //             ),
-  //         ],
-  //       ),
-  //     ),
-  //   );
-  // }
   @override
   Widget build(BuildContext context) {
-    // 1) Status text + style
+    if (detection == "location") {
+      _sourceLang = Provider.of<LocationProvider>(context).language;
+    }
+    logger.d("LANG: $_sourceLang");
     String statusText;
     TextStyle statusStyle;
     if (_isRecording) {
@@ -343,12 +212,10 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // ─── Language selection row ───
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8.0),
                 child: Row(
                   children: [
-                    // Source
                     Expanded(
                       child: DropdownButtonFormField<String>(
                         value: _sourceLang,
@@ -366,14 +233,10 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
                         validator: (v) => v == null ? 'Please select' : null,
                       ),
                     ),
-
                     const SizedBox(width: 10),
-
-                    // Swap button
                     IconButton(
                       icon: const Icon(Icons.swap_horiz),
                       onPressed: () async {
-                        // only swap & send if both dropdowns valid
                         if (_formKey.currentState!.validate()) {
                           setState(() {
                             final tmp = _sourceLang;
@@ -384,10 +247,7 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
                         }
                       },
                     ),
-
                     const SizedBox(width: 10),
-
-                    // Target
                     Expanded(
                       child: DropdownButtonFormField<String>(
                         value: _targetLang,
@@ -408,19 +268,13 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 20),
-
-              // ─── Status Text ───
               Text(
                 statusText,
                 textAlign: TextAlign.center,
                 style: statusStyle,
               ),
-
               const SizedBox(height: 8),
-
-              // ─── Translated text (if any) ───
               if (_translatedAudioTtx != null)
                 Text(
                   "Translation:\n$_translatedAudioTtx",
@@ -428,23 +282,17 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
                   style: const TextStyle(
                       fontSize: 14, fontStyle: FontStyle.italic),
                 ),
-
               const SizedBox(height: 20),
-
-              // ─── Recording Controls ───
               if (!_isRecording && _recordFilePath == null)
                 ElevatedButton(
                   onPressed: _startRecording,
                   child: const Text("Start Recording"),
                 ),
-
               if (_isRecording)
                 ElevatedButton(
                   onPressed: _stopRecording,
                   child: const Text("Stop Recording"),
                 ),
-
-              // ─── Playback / Delete / Send ───
               if (_recordFilePath != null && !_isRecording) ...[
                 ElevatedButton(
                   onPressed: _isPlaying ? null : _playRecording,
@@ -458,7 +306,6 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
                 const SizedBox(height: 10),
                 ElevatedButton(
                   onPressed: () {
-                    // only send if dropdowns valid
                     if (_formKey.currentState!.validate()) {
                       _sendRecording();
                     }
@@ -466,10 +313,7 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
                   child: const Text("Send Recording"),
                 ),
               ],
-
               const SizedBox(height: 20),
-
-              // ─── Loading ───
               if (_isLoading) const Center(child: CircularProgressIndicator()),
             ],
           ),

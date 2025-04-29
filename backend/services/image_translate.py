@@ -2,16 +2,15 @@ import os
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ExifTags
 import torch
-from services.llm_translate import llm_translation
+from services.openai_llm import openai_translation
+from services.anthropic_llm import anthropic_translation
 from services.ocr import extract_word_boxes_easy_ocr, extract_word_boxes_pytesseract, merge_line_boxes, group_boxes_to_lines
 from models.m2m100 import get_model, get_tokenizer
 
 
-model = get_model()
-tokenizer = get_tokenizer()
-
-
-def translate_image_texts(texts, src_lang, tgt_lang):
+def translate_image_texts(texts, src_lang, tgt_lang, model_name):
+    model = get_model(model_name)
+    tokenizer = get_tokenizer(model_name)
     tokenizer.src_lang = src_lang
     inputs = tokenizer(texts, return_tensors="pt",
                        padding=True, truncation=True)
@@ -32,12 +31,13 @@ def get_font_size(translated_lines, merged_boxes):
         x, y, w, h = map(int, box)
         heights.append(h)
 
-    font_size = (sum(heights)/len(heights))*0.75
+    font_size = int((sum(heights)/len(heights))*0.75)-10
     print(f"\nFONT SIZE: {font_size}\n")
     return font_size
 
 
-def erase_and_replace_text(image, src_lang, tgt_lang, model):
+def erase_and_replace_text(image, src_lang, tgt_lang, composite):
+    engine, model_name = composite.split('_:_')
     word_regions = extract_word_boxes_easy_ocr(image)
     # word_regions = extract_word_boxes_pytesseract(image)
 
@@ -51,19 +51,23 @@ def erase_and_replace_text(image, src_lang, tgt_lang, model):
         merged_boxes.append(box)
 
     translated_lines = []
-    if model == "ml":
-        print("\nUSING MACHINE LEARNING\n")
+    if engine == "ml":
+        print(f"\nUSING MACHINE LEARNING: {model_name}\n")
         translated_lines = translate_image_texts(
+            line_texts, src_lang, tgt_lang, model_name)
+    elif engine == "llm" and model_name == "chatgpt":
+        print("\nUSING OPEN AI\n")
+        translated_lines = openai_translation(line_texts, src_lang, tgt_lang)
+    elif engine == "llm" and model_name == "claude":
+        print("\nUSING ANTHROPIC\n")
+        translated_lines = anthropic_translation(
             line_texts, src_lang, tgt_lang)
-    elif model == "llm":
-        print("\nUSING LONG LANGUAGE MODEL\n")
-        translated_lines = llm_translation(line_texts, src_lang, tgt_lang)
 
-    heights = []
-    for (translated_text, box) in zip(translated_lines, merged_boxes):
-        x, y, w, h = map(int, box)
-        print(h)
-        heights.append(h)
+    # heights = []
+    # for (translated_text, box) in zip(translated_lines, merged_boxes):
+    #     x, y, w, h = map(int, box)
+    #     print(h)
+    #     heights.append(h)
 
     font_size = get_font_size(translated_lines, merged_boxes)
 
@@ -115,12 +119,12 @@ def correct_image_orientation(image):
     return image
 
 
-def translate_image_file(file, src_lang, tgt_lang, model):
+def translate_image_file(file, src_lang, tgt_lang, composite):
 
     image = file.convert("RGB")
 
     translated_image_original, translated_image_white = erase_and_replace_text(
-        image, src_lang, tgt_lang, model)
+        image, src_lang, tgt_lang, composite)
 
     img_io_original = BytesIO()
     img_io_white = BytesIO()

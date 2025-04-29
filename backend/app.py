@@ -74,9 +74,9 @@ def upload():
     return jsonify({"message": "File uploaded successfully", "filename": filename})
 
 
-@app.route("/uploads/translate/<path:fname>")
-def serve_translated(fname):
-    return send_from_directory("uploads/translate", fname)
+@app.route("/uploads/translate/<path:filename>")
+def serve_translated(filename):
+    return send_from_directory("uploads/translate", filename)
 
 
 @app.route("/translate-image", methods=["POST"])
@@ -87,21 +87,25 @@ def translate_image():
     file = request.files["file"]
     src_lang = request.form.get("src_lang", "hr")
     tgt_lang = request.form.get("tgt_lang", "en")
-    model = request.form.get("model",    "ml")
+    composite = request.form.get("composite", "ml_facebook/m2m100_1.2B")
 
-    # 1) save original upload
     original_dir = "./uploads/original"
     os.makedirs(original_dir, exist_ok=True)
     base, ext = os.path.splitext(file.filename)
     original_path = os.path.join(original_dir, file.filename)
     file.save(original_path)
 
-    # 2) translate (returns two BytesIO: [org_img_io, white_img_io])
     img = Image.open(original_path)
     img = correct_image_orientation(img)
-    org_io, wht_io = translate_image_file(img, src_lang, tgt_lang, model)
 
-    # 3) write both out
+    cache_key = generate_image_cache_key(original_path, src_lang, tgt_lang)
+    cached_translation = cache.get(cache_key)
+    if cached_translation:
+        print(f"\nCache: {cached_translation}\n")
+        return jsonify(cached_translation)
+
+    org_io, wht_io = translate_image_file(img, src_lang, tgt_lang, composite)
+
     out_dir = "./uploads/translate"
     os.makedirs(out_dir, exist_ok=True)
     org_name = f"{base}_translated_org_{src_lang}-{tgt_lang}.png"
@@ -114,12 +118,14 @@ def translate_image():
     with open(wht_path, "wb") as f:
         f.write(wht_io.getbuffer())
 
-    # 4) serve via URL (ngrok or your domain)
     public_base = request.url_root.rstrip("/") + "/uploads/translate"
     resp = {
         "original_image_url": f"{public_base}/{org_name}",
         "white_image_url":    f"{public_base}/{wht_name}"
     }
+
+    cache.set(cache_key, resp, timeout=6)
+
     return jsonify(resp)
 
 # @app.route("/translate-image", methods=["POST", ])
@@ -175,7 +181,7 @@ def translate_audio():
     file = request.files["file"]
     src_lang = request.form.get("src_lang", "hr")
     tgt_lang = request.form.get("tgt_lang", "en")
-    model = request.form.get("model", "ml")
+    composite = request.form.get("composite", "ml_facebook/m2m100_1.2B")
 
     original_audio_dir = "./audio_uploads/original"
     os.makedirs(original_audio_dir, exist_ok=True)
@@ -196,7 +202,7 @@ def translate_audio():
         return cached_audio_translation
 
     translated_audio_text = translate_audio_file(
-        audio_file, src_lang, tgt_lang, model)
+        audio_file, src_lang, tgt_lang, composite)
 
     # base, ext = os.path.splitext(file.filename)
     # output_dir = "./audio_uploads/translate"
@@ -224,7 +230,7 @@ def translate_text():
     text = data.get("text")
     src_lang = data.get("src_lang", "hr")
     tgt_lang = data.get("tgt_lang", "en")
-    model = data.get("model", "ml")
+    composite = data.get("composite", "ml_:_facebook/m2m100_1.2B")
 
     cache_key = generate_text_cache_key(text, src_lang, tgt_lang)
 
@@ -233,7 +239,8 @@ def translate_text():
         print(f"\nCache: {cached_translation}\n")
         return cached_translation
 
-    translated_text = translate_input_text(text, src_lang, tgt_lang, model)
+    translated_text = translate_input_text(
+        text, src_lang, tgt_lang, composite)
     cache.set(cache_key, translated_text, timeout=600)
 
     return translated_text
