@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
@@ -8,6 +9,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import './constants.dart';
 import 'package:provider/provider.dart';
 import './location_provider.dart';
+import './lang_detector.dart';
 
 const Map<String, String> _languagesNames = {
   'hr': 'Croatian',
@@ -36,6 +38,12 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
   var logger = Logger();
   String? _sourceLang;
   String? _targetLang;
+  String? _suggestion;
+
+  // final detector = LangDetector();
+  //     final code = await detector.detectLang(_inputController.text);
+  //     logger.d("CODE: $code");
+  //     detector.close();
 
   final _baseUrl = dotenv.env['API_URL']!;
 
@@ -65,13 +73,42 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
   Future<void> _sendText() async {
     setState(() {
       _isLoading = true;
+      _suggestion = null;
     });
+
+    final detectionMode = Settings.getValue<String>(
+      "detection_mode",
+      defaultValue: "automatic",
+    );
+
+    if (detectionMode == "automatic") {
+      final input = _inputController.text.trim();
+      if (input.isNotEmpty) {
+        final detector = LangDetector();
+        final code = await detector.detectLang(input);
+        detector.close();
+
+        logger.d("Auto-detected language = $code");
+
+        if (code != _sourceLang && _languagesNames.containsKey(code)) {
+          setState(() {
+            _suggestion = code;
+            _isLoading = false;
+          });
+          return;
+        }
+      }
+    }
+
     try {
-      logger.d("ENGMOD: ${engine}_:_$model");
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw Exception("Not signed in");
+      }
+      final idToken = await user.getIdToken();
       final composite = '${engine}_:_$model';
-      logger.d("COMPOSITE: $composite");
-      var uri = Uri.parse("$_baseUrl/translate-text");
-      Map<String, dynamic> payload = {
+      final uri = Uri.parse("$_baseUrl/translate-text");
+      final payload = {
         'text': _inputController.text,
         'src_lang': _sourceLang,
         'tgt_lang': _targetLang,
@@ -81,35 +118,37 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
 
       final response = await http.post(
         uri,
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $idToken',
+        },
         body: jsonEncode(payload),
       );
 
       if (response.statusCode == 200) {
-        String translatedText = response.body;
-        if (!mounted) return;
-        setState(() {
-          _translatedText = translatedText;
-          _outputController.text = _translatedText;
-        });
+        final body = jsonDecode(response.body);
+        if (body.containsKey('translation')) {
+          setState(() {
+            _translatedText = body['translation'] as String;
+            _outputController.text = _translatedText;
+            _suggestion = null;
+          });
+        }
       } else {
-        if (!mounted) return;
-        logger.d("Translation failed with status: ${response.statusCode}");
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content:
-                Text("Translation failed with status: ${response.statusCode}"),
-          ),
-        );
+        logger.d("Translation failed (${response.statusCode})");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Status ${response.statusCode}")),
+          );
+        }
       }
     } catch (e) {
-      if (!mounted) return;
       logger.d("Error during translation: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Error during translation: $e"),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e")),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -227,6 +266,15 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                   ],
                 ),
               ),
+              if (_suggestion != null && _languagesNames[_suggestion!] != null)
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Text(
+                    "Did you mean ${_languagesNames[_suggestion!]}?",
+                    style: const TextStyle(color: Colors.orange, fontSize: 14),
+                  ),
+                ),
               Padding(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 8, vertical: 16),

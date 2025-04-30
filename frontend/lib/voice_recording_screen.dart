@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:convert';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:logger/web.dart';
 import 'package:record/record.dart';
@@ -11,6 +13,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import './constants.dart';
 import 'package:provider/provider.dart';
 import './location_provider.dart';
+import './tts_service.dart';
 
 const Map<String, String> _languagesNames = {
   'hr': 'Croatian',
@@ -40,6 +43,9 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
   bool _isPlaying = false;
   bool _isLoading = false;
   String? _translatedAudioTtx;
+  late final TtsService _ttsService;
+  String? _playbackLang;
+  String? _suggestion;
 
   final detection =
       Settings.getValue<String>("detection_mode", defaultValue: "automatic");
@@ -120,7 +126,14 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _ttsService = TtsService();
+  }
+
+  @override
   void dispose() {
+    _ttsService.dispose();
     _recorder.dispose();
     _audioPlayer.dispose();
     super.dispose();
@@ -132,11 +145,17 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
       _isLoading = true;
     });
     try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw Exception("Not signed in");
+      }
+      final idToken = await user.getIdToken();
       final composite = '${engine}_:_$model';
       logger.d("COMPOSITE: $composite");
       var uri = Uri.parse("$_baseUrl/translate-audio");
-      var request = http.MultipartRequest('POST', uri);
-      logger.d(_recordFilePath);
+      var request = http.MultipartRequest('POST', uri)
+        ..headers['Authorization'] = 'Bearer $idToken';
+
       request.files
           .add(await http.MultipartFile.fromPath('file', _recordFilePath!));
       request.fields['src_lang'] = _sourceLang!;
@@ -144,17 +163,21 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
       request.fields['composite'] = composite;
 
       var response = await request.send();
-
       if (response.statusCode == 200) {
-        String textFromAudio = await response.stream.bytesToString();
-        logger.d(
-            "successfully returned text from audio textFromAudio: $textFromAudio");
-        if (!mounted) return;
-        setState(() {
-          _translatedAudioTtx = textFromAudio;
-          logger.d(
-              "successfully returned text from audio _translatedAudioTtx: $_translatedAudioTtx");
-        });
+        final body = jsonDecode(await response.stream.bytesToString());
+        if (body.containsKey('detected_lang')) {
+          setState(() {
+            _suggestion = body['detected_lang'] as String;
+            _translatedAudioTtx = null;
+            _playbackLang = null;
+          });
+        } else if (body.containsKey('translation')) {
+          setState(() {
+            _translatedAudioTtx = body['translation'] as String;
+            _playbackLang = _targetLang;
+            _suggestion = null;
+          });
+        }
       } else {
         if (!mounted) return;
         logger.d("Translation failed with status: ${response.statusCode}");
@@ -268,6 +291,15 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
                   ],
                 ),
               ),
+              if (_suggestion != null)
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Text(
+                    "Did you mean ${_languagesNames[_suggestion!]}?",
+                    style: const TextStyle(color: Colors.orange, fontSize: 14),
+                  ),
+                ),
               const SizedBox(height: 20),
               Text(
                 statusText,
@@ -276,11 +308,32 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
               ),
               const SizedBox(height: 8),
               if (_translatedAudioTtx != null)
-                Text(
-                  "Translation:\n$_translatedAudioTtx",
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 14, fontStyle: FontStyle.italic),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          "Translation:\n$_translatedAudioTtx",
+                          style: const TextStyle(
+                              fontSize: 18, fontStyle: FontStyle.italic),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.volume_up),
+                        onPressed: (_translatedAudioTtx != null &&
+                                _playbackLang != null)
+                            ? () {
+                                _ttsService.speak(
+                                  _translatedAudioTtx!,
+                                  _playbackLang!,
+                                );
+                              }
+                            : null,
+                      ),
+                    ],
+                  ),
                 ),
               const SizedBox(height: 20),
               if (!_isRecording && _recordFilePath == null)
