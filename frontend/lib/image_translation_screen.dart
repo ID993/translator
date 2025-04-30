@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import './location_provider.dart';
 import 'package:flutter/material.dart';
@@ -134,10 +135,16 @@ class _ImageTranslationScreenState extends State<ImageTranslationScreen> {
     setState(() => _isLoading = true);
 
     try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw Exception("Not signed in");
+      }
+      final idToken = await user.getIdToken();
       final composite = '${engine}_:_$model';
       logger.d("COMPOSITE: $composite");
       var uri = Uri.parse("$_baseUrl/translate-image");
       var req = http.MultipartRequest('POST', uri)
+        ..headers['Authorization'] = 'Bearer $idToken'
         ..files.add(
             await http.MultipartFile.fromPath('file', _selectedImage!.path))
         ..fields['src_lang'] = _sourceLang!

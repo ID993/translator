@@ -3,9 +3,9 @@ import os
 import fasttext
 
 
-LOCAL_DIR = os.path.dirname(__file__)
-MODEL_PATH = os.path.join(LOCAL_DIR, "models", "lid.176.bin")
-
+UTILS_DIR = os.path.dirname(__file__)
+BACKEND_DIR = os.path.dirname(UTILS_DIR)
+MODEL_PATH = os.path.join(BACKEND_DIR, "models", "lid.176.bin")
 model = fasttext.load_model(MODEL_PATH)
 
 PARENT_LANGS = {
@@ -39,19 +39,3 @@ def get_parent_language(chosen_lang, lang_map):
 def get_lang(text):
     lang = detect_language(text)[0][0]
     return get_parent_language(lang, PARENT_LANGS)
-
-
-if __name__ == "__main__":
-    examples = [
-        "I'm gonna win.",
-        "Ik ben vanmorgen eerder wakker geworden dan normaal.",
-        "Esta es una prueba de detección de idioma.",
-        "Moja sestra voli svirati klavir poslijepodne.",
-        "Vozim bicikl do posla svaki dan.",
-        "Našla sam stari album sa starim fotografijama.",
-        "Pokusaj kraja.",
-        "Pricekaj me."
-    ]
-    for sentence in examples:
-        print(sentence)
-        print(get_lang(sentence))
