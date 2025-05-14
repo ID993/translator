@@ -12,6 +12,7 @@ import 'package:provider/provider.dart';
 import 'location_provider.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+//final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,6 +41,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
+      //navigatorObservers: [routeObserver],
       home: const AuthWrapper(),
       routes: {
         '/login': (context) => LoginScreen(),

@@ -1,3 +1,72 @@
 const kModelTypeKey = 'translation_engine';
 const kMlModelKey = 'ml_model';
 const kLlmModelKey = 'llm_model';
+
+const Map<String, String> engines = {
+  'ml': 'Machine Learning Model',
+  'llm': 'LLM Model',
+};
+
+const Map<String, String> modelNames = {
+  'facebook/m2m100_1.2B': 'M2M100',
+  'facebook/mbart-large-50-many-to-many-mmt': 'mBART50',
+  'chatgpt': 'OpenAI ChatGPT',
+  'claude': 'Anthropic Claude'
+};
+
+const Map<String, String> fastTextLangNames = {
+  'af': 'Afrikaans',
+  'ar': 'Arabic',
+  'bg': 'Bulgarian',
+  'bn': 'Bengali',
+  'ca': 'Catalan',
+  'cs': 'Czech',
+  'cy': 'Welsh',
+  'da': 'Danish',
+  'de': 'German',
+  'el': 'Greek',
+  'en': 'English',
+  'es': 'Spanish',
+  'et': 'Estonian',
+  'fa': 'Persian',
+  'fi': 'Finnish',
+  'fr': 'French',
+  'gu': 'Gujarati',
+  'he': 'Hebrew',
+  'hi': 'Hindi',
+  'hr': 'Croatian',
+  'hu': 'Hungarian',
+  'id': 'Indonesian',
+  'it': 'Italian',
+  'ja': 'Japanese',
+  'kn': 'Kannada',
+  'ko': 'Korean',
+  'lt': 'Lithuanian',
+  'lv': 'Latvian',
+  'mk': 'Macedonian',
+  'ml': 'Malayalam',
+  'mr': 'Marathi',
+  'ne': 'Nepali',
+  'nl': 'Dutch',
+  'no': 'Norwegian',
+  'pa': 'Punjabi',
+  'pl': 'Polish',
+  'pt': 'Portuguese',
+  'ro': 'Romanian',
+  'ru': 'Russian',
+  'sk': 'Slovak',
+  'sl': 'Slovenian',
+  'so': 'Somali',
+  'sq': 'Albanian',
+  'sv': 'Swedish',
+  'sw': 'Swahili',
+  'ta': 'Tamil',
+  'te': 'Telugu',
+  'th': 'Thai',
+  'tl': 'Tagalog',
+  'tr': 'Turkish',
+  'uk': 'Ukrainian',
+  'ur': 'Urdu',
+  'vi': 'Vietnamese',
+  'zh': 'Chinese',
+};

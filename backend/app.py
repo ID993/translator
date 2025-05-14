@@ -116,6 +116,9 @@ def translate_audio():
     src_lang = request.form.get("src_lang", "hr")
     tgt_lang = request.form.get("tgt_lang", "en")
     composite = request.form.get("composite", "ml_facebook/m2m100_1.2B")
+    force_flag = request.form.get("force", "0") == "1"
+
+    print(f"FORCE: {force_flag}")
 
     original_audio_dir = "./audio_uploads/original"
     os.makedirs(original_audio_dir, exist_ok=True)
@@ -128,26 +131,23 @@ def translate_audio():
     cache_key = generate_audio_cache_key(
         original_audio_path, src_lang, tgt_lang)
 
-    audio_file = original_audio_path
-
-    text = extract_text_from_audio(audio_file)
-    detected = get_lang(text)
-    if detected != src_lang:
-        return jsonify({
-            "detected_lang": detected
-        }), 200
-
     cached_audio_translation = cache.get(cache_key)
     if cached_audio_translation:
         print(f"\nCache: {cached_audio_translation}\n")
-        return jsonify({"translation": cached_audio_translation}), 200
+        return jsonify({"translation": cached_audio_translation, "detected_lang": ""}), 200
+
+    audio_file = original_audio_path
+
+    text = extract_text_from_audio(audio_file, src_lang)
+    detected = get_lang(text)
+
+    if not force_flag and detected != src_lang:
+        return jsonify({"translation": "", "detected_lang": detected}), 200
 
     translated_audio_text = translate_audio_file(
         text, src_lang, tgt_lang, composite)
-
     cache.set(cache_key, translated_audio_text, timeout=600)
-
-    return jsonify({"translation": translated_audio_text}), 200
+    return jsonify({"translation": translated_audio_text, "detected_lang": detected}), 200
 
 
 @app.route("/translate-text", methods=["POST", "GET"])
@@ -163,19 +163,24 @@ def translate_text():
     src_lang = data.get("src_lang", "hr")
     tgt_lang = data.get("tgt_lang", "en")
     composite = data.get("composite", "ml_:_facebook/m2m100_1.2B")
+    force_flag = data.get("force", "0")
+
+    print(f"FORCE: {force_flag}")
 
     cache_key = generate_text_cache_key(text, src_lang, tgt_lang)
-
     cached_translation = cache.get(cache_key)
     if cached_translation:
         print(f"\nCache: {cached_translation}\n")
-        return jsonify({"translation": cached_translation}), 200
+        return jsonify({"translation": cached_translation, "detected_lang": ""}), 200
+
+    detected = get_lang(text)
+    if not force_flag and detected != src_lang:
+        return jsonify({"translation": "", "detected_lang": detected}), 200
 
     translated_text = translate_input_text(
         text, src_lang, tgt_lang, composite)
     cache.set(cache_key, translated_text, timeout=600)
-
-    return jsonify({"translation": translated_text}), 200
+    return jsonify({"translation": translated_text, "detected_lang": detected}), 200
 
 
 if __name__ == "__main__":
