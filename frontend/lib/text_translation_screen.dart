@@ -9,7 +9,6 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import './constants.dart';
 import 'package:provider/provider.dart';
 import './location_provider.dart';
-import './lang_detector.dart';
 
 const Map<String, String> _languagesNames = {
   'hr': 'Croatian',
@@ -34,16 +33,13 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
   final TextEditingController _inputController = TextEditingController();
   final TextEditingController _outputController = TextEditingController();
   String _translatedText = "";
-  final _languages = _languagesNames.keys.toList();
+  final _languages = _languagesNames.keys.toList(); //fastTextLangNames
+
   var logger = Logger();
   String? _sourceLang;
   String? _targetLang;
   String? _suggestion;
-
-  // final detector = LangDetector();
-  //     final code = await detector.detectLang(_inputController.text);
-  //     logger.d("CODE: $code");
-  //     detector.close();
+  bool force = false;
 
   final _baseUrl = dotenv.env['API_URL']!;
 
@@ -76,30 +72,6 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
       _suggestion = null;
     });
 
-    final detectionMode = Settings.getValue<String>(
-      "detection_mode",
-      defaultValue: "automatic",
-    );
-
-    if (detectionMode == "automatic") {
-      final input = _inputController.text.trim();
-      if (input.isNotEmpty) {
-        final detector = LangDetector();
-        final code = await detector.detectLang(input);
-        detector.close();
-
-        logger.d("Auto-detected language = $code");
-
-        if (code != _sourceLang && _languagesNames.containsKey(code)) {
-          setState(() {
-            _suggestion = code;
-            _isLoading = false;
-          });
-          return;
-        }
-      }
-    }
-
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
@@ -112,8 +84,8 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
         'text': _inputController.text,
         'src_lang': _sourceLang,
         'tgt_lang': _targetLang,
-        'model': engine,
         'composite': composite,
+        'force': force
       };
 
       final response = await http.post(
@@ -127,13 +99,17 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
 
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
-        if (body.containsKey('translation')) {
-          setState(() {
-            _translatedText = body['translation'] as String;
-            _outputController.text = _translatedText;
+        setState(() {
+          _translatedText = body['translation'] as String;
+          if (force) {
             _suggestion = null;
-          });
-        }
+          } else {
+            _suggestion = body['detected_lang'] as String;
+          }
+          _outputController.text = _translatedText;
+        });
+        logger.d("DETECTED LANG: $_suggestion");
+        logger.d("TEXT: $_translatedText");
       } else {
         logger.d("Translation failed (${response.statusCode})");
         if (mounted) {
@@ -175,12 +151,32 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
     });
   }
 
+  void _showUnsupportedDialog(String code) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Unsupported language"),
+        content:
+            Text("${fastTextLangNames[code] ?? code} isn't in supported list. "
+                "Please choose a language from the dropdown first."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text("OK"),
+          )
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    bool isSupported(String code) => _languagesNames.containsKey(code);
     if (detection == "location") {
       _sourceLang = Provider.of<LocationProvider>(context).language;
     }
-    logger.d("LANG: $_sourceLang");
+
+    logger.d("SRC LANG: $_sourceLang");
     return Scaffold(
       resizeToAvoidBottomInset: false,
       appBar: AppBar(title: const Text("Translate Text")),
@@ -266,13 +262,64 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                   ],
                 ),
               ),
-              if (_suggestion != null && _languagesNames[_suggestion!] != null)
+              if (_suggestion != null &&
+                  _sourceLang != null &&
+                  _suggestion != _sourceLang)
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: Text(
-                    "Did you mean ${_languagesNames[_suggestion!]}?",
-                    style: const TextStyle(color: Colors.orange, fontSize: 14),
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Detected language: ${fastTextLangNames[_suggestion!]!}.",
+                        style: TextStyle(color: Colors.orange, fontSize: 14),
+                      ),
+                      SizedBox(height: 4),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          ElevatedButton(
+                            onPressed: () {
+                              final cand = _suggestion!;
+                              if (!isSupported(cand)) {
+                                _showUnsupportedDialog(cand);
+                                return;
+                              }
+                              setState(() {
+                                _sourceLang = cand;
+                                _suggestion = null;
+                                force = false;
+                              });
+                              _sendText();
+                            },
+                            child: Text(
+                              "Use ${fastTextLangNames[_suggestion]}",
+                              style: TextStyle(fontSize: 14),
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          TextButton(
+                            onPressed: () {
+                              final keep = _sourceLang!;
+                              if (!isSupported(keep)) {
+                                _showUnsupportedDialog(keep);
+                                return;
+                              }
+                              setState(() {
+                                _suggestion = null;
+                                force = true;
+                              });
+                              _sendText();
+                            },
+                            child: Text(
+                              "Keep ${_sourceLang != null ? fastTextLangNames[_sourceLang!] ?? _sourceLang! : '…'}",
+                              style: TextStyle(fontSize: 14),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               Padding(

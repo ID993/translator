@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:logger/logger.dart';
-
+import 'package:provider/provider.dart';
+import 'location_provider.dart';
 import './constants.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -38,7 +39,15 @@ class _SettingsPageState extends State<SettingsPage> {
                     "automatic": "Automatic",
                   },
                   selected: "automatic",
-                  onChange: (_) => setState(() {}),
+                  onChange: (newVal) {
+                    setState(() {});
+                    final locProv = context.read<LocationProvider>();
+                    if (newVal == "location") {
+                      locProv.startTracking();
+                    } else {
+                      locProv.stopTracking();
+                    }
+                  },
                 ),
                 RadioSettingsTile<String>(
                   title: "Model",
@@ -47,48 +56,84 @@ class _SettingsPageState extends State<SettingsPage> {
                     "ml": "Machine Learning Model",
                     "llm": "LLM Model",
                   },
-                  selected: "ml",
+                  selected: currentModelType!,
                   onChange: (_) => setState(() {}),
                 ),
                 if (currentModelType == 'ml')
-                  SimpleSettingsTile(
-                    title: 'Choose ML Model',
-                    leading: const Icon(Icons.memory),
-                    child: SettingsScreen(
-                      title: 'Select ML Model',
-                      children: [
-                        RadioSettingsTile<String>(
-                          title: "ML Model",
-                          settingKey: kMlModelKey,
-                          values: const {
-                            'facebook/m2m100_1.2B': 'M2M100',
-                            'facebook/mbart-large-50-many-to-many-mmt':
-                                'mBART50',
-                          },
-                          selected: 'm2m100',
-                        ),
-                      ],
+                  ListTile(
+                    title: const Text('Choose ML Model'),
+                    subtitle: Text(
+                      modelNames[Settings.getValue<String>(
+                        kMlModelKey,
+                        defaultValue: 'facebook/m2m100_1.2B',
+                      )]!,
                     ),
+                    leading: const Icon(Icons.memory),
+                    trailing: const Icon(
+                        Icons.chevron_right), // <-- The arrow indicator
+                    onTap: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => SettingsScreen(
+                            title: 'Select ML Model',
+                            children: [
+                              RadioSettingsTile<String>(
+                                title: "ML Model",
+                                settingKey: kMlModelKey,
+                                values: const {
+                                  'facebook/m2m100_1.2B': 'M2M100',
+                                  'facebook/mbart-large-50-many-to-many-mmt':
+                                      'mBART50',
+                                },
+                                selected: Settings.getValue<String>(
+                                  kMlModelKey,
+                                  defaultValue: 'facebook/m2m100_1.2B',
+                                )!,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                      setState(() {}); // Refresh subtitle after return
+                    },
                   ),
                 if (currentModelType == 'llm')
-                  SimpleSettingsTile(
-                    title: 'Choose LLM Model',
-                    leading: const Icon(Icons.chat_bubble_outline),
-                    child: SettingsScreen(
-                      title: 'Select LLM Model',
-                      children: [
-                        RadioSettingsTile<String>(
-                          title: "LLM Model",
-                          settingKey: kLlmModelKey,
-                          values: const {
-                            'chatgpt': 'OpenAI ChatGPT',
-                            'claude': 'Anthropic Claude',
-                          },
-                          selected: 'chatgpt',
-                        ),
-                      ],
+                  ListTile(
+                    title: const Text('Choose LLM Model'),
+                    subtitle: Text(
+                      modelNames[Settings.getValue<String>(
+                        kLlmModelKey,
+                        defaultValue: 'chatgpt',
+                      )]!,
                     ),
+                    leading: const Icon(Icons.chat_bubble_outline),
+                    trailing: const Icon(Icons.chevron_right), // <-- The arrow
+                    onTap: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => SettingsScreen(
+                            title: 'Select LLM Model',
+                            children: [
+                              RadioSettingsTile<String>(
+                                title: "LLM Model",
+                                settingKey: kLlmModelKey,
+                                values: const {
+                                  'chatgpt': 'OpenAI ChatGPT',
+                                  'claude': 'Anthropic Claude',
+                                },
+                                selected: Settings.getValue<String>(
+                                  kLlmModelKey,
+                                  defaultValue: 'chatgpt',
+                                )!,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                      setState(() {});
+                    },
                   ),
+                const Divider(height: 1, thickness: 0.6),
               ],
             ),
           ],

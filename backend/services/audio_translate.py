@@ -17,11 +17,11 @@ def m4a_to_wav(audio_file):
     return wav_audio
 
 
-def extract_text_from_audio(audio_file):
+def extract_text_from_audio(audio_file, src_lang):
     wav = m4a_to_wav(audio_file)
     with sr.AudioFile(wav) as source:
         audio_data = r.record(source)
-    speech_to_text = r.recognize_google(audio_data)
+    speech_to_text = r.recognize_google(audio_data, language=src_lang)
     speech_to_text = speech_to_text.lower()
     print(f"\nTHIS IS EXTRACTION TEXT: {speech_to_text}\n")
     return speech_to_text

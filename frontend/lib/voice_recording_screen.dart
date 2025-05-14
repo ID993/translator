@@ -121,6 +121,7 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
       setState(() {
         _recordFilePath = null;
         _translatedAudioTtx = null;
+        _suggestion = null;
       });
     }
   }
@@ -139,7 +140,8 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
     super.dispose();
   }
 
-  Future<void> _sendRecording() async {
+  Future<void> _sendRecording({bool force = false}) async {
+    logger.d("FORCE: $force");
     if (_recordFilePath == null) return;
     setState(() {
       _isLoading = true;
@@ -161,23 +163,22 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
       request.fields['src_lang'] = _sourceLang!;
       request.fields['tgt_lang'] = _targetLang!;
       request.fields['composite'] = composite;
+      request.fields['force'] = force ? '1' : '0';
 
       var response = await request.send();
       if (response.statusCode == 200) {
         final body = jsonDecode(await response.stream.bytesToString());
-        if (body.containsKey('detected_lang')) {
-          setState(() {
-            _suggestion = body['detected_lang'] as String;
-            _translatedAudioTtx = null;
-            _playbackLang = null;
-          });
-        } else if (body.containsKey('translation')) {
-          setState(() {
-            _translatedAudioTtx = body['translation'] as String;
-            _playbackLang = _targetLang;
+        setState(() {
+          if (force) {
             _suggestion = null;
-          });
-        }
+          } else {
+            _suggestion = body['detected_lang'] as String;
+          }
+
+          _translatedAudioTtx = body['translation'] as String;
+          _playbackLang = _targetLang;
+        });
+        logger.d("DETECTED LANG: $_suggestion");
       } else {
         if (!mounted) return;
         logger.d("Translation failed with status: ${response.statusCode}");
@@ -205,8 +206,27 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
     }
   }
 
+  void _showUnsupportedDialog(String code) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Unsupported language"),
+        content:
+            Text("${fastTextLangNames[code] ?? code} isn't in supported list. "
+                "Please choose a language from the dropdown first."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text("OK"),
+          )
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    bool isSupported(String code) => _languagesNames.containsKey(code);
     if (detection == "location") {
       _sourceLang = Provider.of<LocationProvider>(context).language;
     }
@@ -236,54 +256,63 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                padding: const EdgeInsets.only(bottom: 16.0),
                 child: Row(
                   children: [
                     Expanded(
                       child: DropdownButtonFormField<String>(
                         value: _sourceLang,
-                        decoration: InputDecoration(
+                        decoration: const InputDecoration(
                           labelText: 'From',
                           border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 14),
                         ),
-                        items: _languages.map((code) {
-                          return DropdownMenuItem(
-                            value: code,
-                            child: Text(_languagesNames[code]!),
-                          );
-                        }).toList(),
+                        items: _languages
+                            .map((code) => DropdownMenuItem(
+                                  value: code,
+                                  child: Text(_languagesNames[code]!),
+                                ))
+                            .toList(),
                         onChanged: (v) => setState(() => _sourceLang = v),
                         validator: (v) => v == null ? 'Please select' : null,
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    IconButton(
-                      icon: const Icon(Icons.swap_horiz),
-                      onPressed: () async {
-                        if (_formKey.currentState!.validate()) {
-                          setState(() {
-                            final tmp = _sourceLang;
-                            _sourceLang = _targetLang;
-                            _targetLang = tmp;
-                          });
-                          await _sendRecording();
-                        }
-                      },
+                    const SizedBox(width: 12),
+                    Column(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.swap_horiz),
+                          tooltip: "Swap languages",
+                          onPressed: () async {
+                            if (_formKey.currentState!.validate()) {
+                              setState(() {
+                                final tmp = _sourceLang;
+                                _sourceLang = _targetLang;
+                                _targetLang = tmp;
+                              });
+                              await _sendRecording();
+                            }
+                          },
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: DropdownButtonFormField<String>(
                         value: _targetLang,
-                        decoration: InputDecoration(
+                        decoration: const InputDecoration(
                           labelText: 'To',
                           border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 14),
                         ),
-                        items: _languages.map((code) {
-                          return DropdownMenuItem(
-                            value: code,
-                            child: Text(_languagesNames[code]!),
-                          );
-                        }).toList(),
+                        items: _languages
+                            .map((code) => DropdownMenuItem(
+                                  value: code,
+                                  child: Text(_languagesNames[code]!),
+                                ))
+                            .toList(),
                         onChanged: (v) => setState(() => _targetLang = v),
                         validator: (v) => v == null ? 'Please select' : null,
                       ),
@@ -291,15 +320,69 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
                   ],
                 ),
               ),
-              if (_suggestion != null)
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: Text(
-                    "Did you mean ${_languagesNames[_suggestion!]}?",
-                    style: const TextStyle(color: Colors.orange, fontSize: 14),
+              if (_suggestion != null &&
+                  _sourceLang != null &&
+                  _suggestion != _sourceLang)
+                Container(
+                  margin: const EdgeInsets.symmetric(vertical: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: (0.1 * 255)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Detected language: ${fastTextLangNames[_suggestion!]!}",
+                        style: const TextStyle(
+                            color: Colors.orange, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 12,
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              final cand = _suggestion!;
+                              if (!isSupported(cand)) {
+                                _showUnsupportedDialog(cand);
+                                return;
+                              }
+                              setState(() {
+                                _sourceLang = cand;
+                                _suggestion = null;
+                                _translatedAudioTtx = null;
+                              });
+                              _sendRecording();
+                            },
+                            icon: const Icon(Icons.check),
+                            label:
+                                Text("Use ${fastTextLangNames[_suggestion]}"),
+                          ),
+                          TextButton.icon(
+                            onPressed: () {
+                              final keep = _sourceLang!;
+                              if (!isSupported(keep)) {
+                                _showUnsupportedDialog(keep);
+                                return;
+                              }
+                              setState(() {
+                                _suggestion = null;
+                                _translatedAudioTtx = null;
+                              });
+                              _sendRecording(force: true);
+                            },
+                            icon: const Icon(Icons.block),
+                            label:
+                                Text("Keep ${fastTextLangNames[_sourceLang!]}"),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
+
               const SizedBox(height: 20),
               Text(
                 statusText,
@@ -307,65 +390,97 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
                 style: statusStyle,
               ),
               const SizedBox(height: 8),
-              if (_translatedAudioTtx != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+              // if (_translatedAudioTtx != null && _translatedAudioTtx != "")
+              if (_translatedAudioTtx?.isNotEmpty == true)
+                Container(
+                  margin: const EdgeInsets.symmetric(vertical: 16),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Text(
-                          "Translation:\n$_translatedAudioTtx",
-                          style: const TextStyle(
-                              fontSize: 18, fontStyle: FontStyle.italic),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.volume_up),
-                        onPressed: (_translatedAudioTtx != null &&
-                                _playbackLang != null)
-                            ? () {
-                                _ttsService.speak(
-                                  _translatedAudioTtx!,
-                                  _playbackLang!,
-                                );
-                              }
-                            : null,
+                      const Text("Translation:",
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _translatedAudioTtx!,
+                              style: const TextStyle(
+                                  fontSize: 18, fontStyle: FontStyle.italic),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.volume_up),
+                            tooltip: "Play translation",
+                            onPressed: () {
+                              _ttsService.speak(
+                                  _translatedAudioTtx!, _playbackLang!);
+                            },
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
+
               const SizedBox(height: 20),
-              if (!_isRecording && _recordFilePath == null)
-                ElevatedButton(
-                  onPressed: _startRecording,
-                  child: const Text("Start Recording"),
-                ),
-              if (_isRecording)
-                ElevatedButton(
-                  onPressed: _stopRecording,
-                  child: const Text("Stop Recording"),
-                ),
-              if (_recordFilePath != null && !_isRecording) ...[
-                ElevatedButton(
-                  onPressed: _isPlaying ? null : _playRecording,
-                  child: const Text("Play Recording"),
-                ),
-                const SizedBox(height: 10),
-                ElevatedButton(
-                  onPressed: _deleteRecording,
-                  child: const Text("Delete Recording"),
-                ),
-                const SizedBox(height: 10),
-                ElevatedButton(
-                  onPressed: () {
-                    if (_formKey.currentState!.validate()) {
-                      _sendRecording();
-                    }
-                  },
-                  child: const Text("Send Recording"),
-                ),
-              ],
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (!_isRecording && _recordFilePath == null)
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.fiber_manual_record),
+                      label: const Text("Start Recording"),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.redAccent),
+                      onPressed: _startRecording,
+                    ),
+                  if (_isRecording)
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.stop),
+                      label: const Text("Stop Recording"),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orangeAccent),
+                      onPressed: _stopRecording,
+                    ),
+                  if (_recordFilePath != null && !_isRecording) ...[
+                    ElevatedButton.icon(
+                      icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
+                      label: Text(_isPlaying ? "Playing..." : "Play Recording"),
+                      onPressed: _isPlaying ? null : _playRecording,
+                    ),
+                    const SizedBox(height: 10),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.delete),
+                      label: const Text("Delete Recording"),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey.shade300),
+                      onPressed: _deleteRecording,
+                    ),
+                    const SizedBox(height: 10),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.send),
+                      label: const Text("Send for Translation"),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueAccent),
+                      onPressed: () {
+                        if (_formKey.currentState!.validate()) {
+                          _sendRecording();
+                        }
+                      },
+                    ),
+                  ],
+                ],
+              ),
+
               const SizedBox(height: 20),
               if (_isLoading) const Center(child: CircularProgressIndicator()),
             ],
