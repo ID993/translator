@@ -9,6 +9,7 @@ from models.m2m100 import get_model, get_tokenizer
 
 
 def translate_image_texts(texts, src_lang, tgt_lang, model_name):
+
     model = get_model(model_name)
     tokenizer = get_tokenizer(model_name)
     tokenizer.src_lang = src_lang
@@ -49,6 +50,9 @@ def erase_and_replace_text(image, src_lang, tgt_lang, composite):
         merged_text, box = merge_line_boxes(line)
         line_texts.append(merged_text)
         merged_boxes.append(box)
+
+    if not line_texts:
+        raise ValueError("No text detected in image to translate.")
 
     translated_lines = []
     if engine == "ml":
