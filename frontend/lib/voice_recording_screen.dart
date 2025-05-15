@@ -46,9 +46,10 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
   late final TtsService _ttsService;
   String? _playbackLang;
   String? _suggestion;
+  bool force = false;
 
   final detection =
-      Settings.getValue<String>("detection_mode", defaultValue: "automatic");
+      Settings.getValue<String>("detection_mode", defaultValue: "no_location");
 
   String? get engine => Settings.getValue<String>(
         kModelTypeKey,
@@ -130,6 +131,11 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
   void initState() {
     super.initState();
     _ttsService = TtsService();
+    if (detection == "location") {
+      final localLang =
+          Provider.of<LocationProvider>(context, listen: false).language;
+      _sourceLang = localLang;
+    }
   }
 
   @override
@@ -140,11 +146,14 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
     super.dispose();
   }
 
-  Future<void> _sendRecording({bool force = false}) async {
+  Future<void> _sendRecording() async {
+    logger.d("SRC: $_sourceLang, TGT: $_targetLang");
+    logger.d("SUGG: $_suggestion");
     logger.d("FORCE: $force");
     if (_recordFilePath == null) return;
     setState(() {
       _isLoading = true;
+      //_suggestion = null;
     });
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -166,8 +175,9 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
       request.fields['force'] = force ? '1' : '0';
 
       var response = await request.send();
+      final responseString = await response.stream.bytesToString();
       if (response.statusCode == 200) {
-        final body = jsonDecode(await response.stream.bytesToString());
+        final body = jsonDecode(responseString);
         setState(() {
           if (force) {
             _suggestion = null;
@@ -181,12 +191,18 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
         logger.d("DETECTED LANG: $_suggestion");
       } else {
         if (!mounted) return;
-        logger.d("Translation failed with status: ${response.statusCode}");
+        String errorMessage;
+        try {
+          final errorJson = jsonDecode(responseString);
+          errorMessage = errorJson['error'] ??
+              "Translation failed with status: ${response.statusCode}";
+        } catch (_) {
+          errorMessage =
+              "Translation failed with status: ${response.statusCode}";
+        }
+        logger.d("Translation failed: $errorMessage");
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content:
-                Text("Translation failed with status: ${response.statusCode}"),
-          ),
+          SnackBar(content: Text(errorMessage)),
         );
       }
     } catch (e) {
@@ -227,10 +243,6 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
   @override
   Widget build(BuildContext context) {
     bool isSupported(String code) => _languagesNames.containsKey(code);
-    if (detection == "location") {
-      _sourceLang = Provider.of<LocationProvider>(context).language;
-    }
-    logger.d("LANG: $_sourceLang");
     String statusText;
     TextStyle statusStyle;
     if (_isRecording) {
@@ -274,7 +286,9 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
                                   child: Text(_languagesNames[code]!),
                                 ))
                             .toList(),
-                        onChanged: (v) => setState(() => _sourceLang = v),
+                        onChanged: (v) => setState(() {
+                          _sourceLang = v;
+                        }),
                         validator: (v) => v == null ? 'Please select' : null,
                       ),
                     ),
@@ -290,6 +304,7 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
                                 final tmp = _sourceLang;
                                 _sourceLang = _targetLang;
                                 _targetLang = tmp;
+                                force = false;
                               });
                               await _sendRecording();
                             }
@@ -313,7 +328,9 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
                                   child: Text(_languagesNames[code]!),
                                 ))
                             .toList(),
-                        onChanged: (v) => setState(() => _targetLang = v),
+                        onChanged: (v) => setState(() {
+                          _targetLang = v;
+                        }),
                         validator: (v) => v == null ? 'Please select' : null,
                       ),
                     ),
@@ -334,13 +351,14 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "Detected language: ${fastTextLangNames[_suggestion!]!}",
-                        style: const TextStyle(
+                        "Detected language: ${fastTextLangNames[_suggestion]}",
+                        style: TextStyle(
                             color: Colors.orange, fontWeight: FontWeight.w600),
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: 8),
                       Wrap(
-                        spacing: 12,
+                        spacing: 8,
+                        runSpacing: 4,
                         children: [
                           ElevatedButton.icon(
                             onPressed: () {
@@ -357,33 +375,39 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
                               _sendRecording();
                             },
                             icon: const Icon(Icons.check),
-                            label:
-                                Text("Use ${fastTextLangNames[_suggestion]}"),
+                            label: Text(
+                              "Use ${fastTextLangNames[_suggestion]}",
+                              style: TextStyle(fontSize: 14),
+                            ),
                           ),
                           TextButton.icon(
-                            onPressed: () {
-                              final keep = _sourceLang!;
-                              if (!isSupported(keep)) {
-                                _showUnsupportedDialog(keep);
-                                return;
-                              }
-                              setState(() {
-                                _suggestion = null;
-                                _translatedAudioTtx = null;
-                              });
-                              _sendRecording(force: true);
-                            },
-                            icon: const Icon(Icons.block),
-                            label:
-                                Text("Keep ${fastTextLangNames[_sourceLang!]}"),
-                          ),
+                              onPressed: () {
+                                final keep = _sourceLang!;
+                                if (!isSupported(keep)) {
+                                  _showUnsupportedDialog(keep);
+                                  return;
+                                }
+                                setState(() {
+                                  _suggestion = null;
+                                  _translatedAudioTtx = null;
+                                  force = true;
+                                });
+                                _sendRecording();
+                              },
+                              icon: const Icon(Icons.block),
+                              label: Text(
+                                "Keep ${fastTextLangNames[_sourceLang]}",
+                                style: TextStyle(
+                                  fontSize: 14,
+                                ),
+                              )),
                         ],
                       ),
                     ],
                   ),
                 ),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 10),
               Text(
                 statusText,
                 textAlign: TextAlign.center,
@@ -470,7 +494,8 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
                       icon: const Icon(Icons.send),
                       label: const Text("Send for Translation"),
                       style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blueAccent),
+                          backgroundColor:
+                              const Color.fromARGB(255, 78, 123, 199)),
                       onPressed: () {
                         if (_formKey.currentState!.validate()) {
                           _sendRecording();

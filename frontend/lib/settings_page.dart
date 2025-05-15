@@ -36,9 +36,9 @@ class _SettingsPageState extends State<SettingsPage> {
                   settingKey: "detection_mode",
                   values: const {
                     "location": "Location",
-                    "automatic": "Automatic",
+                    "no_location": "No Location",
                   },
-                  selected: "automatic",
+                  selected: "no_location",
                   onChange: (newVal) {
                     setState(() {});
                     final locProv = context.read<LocationProvider>();
@@ -107,7 +107,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       )]!,
                     ),
                     leading: const Icon(Icons.chat_bubble_outline),
-                    trailing: const Icon(Icons.chevron_right), // <-- The arrow
+                    trailing: const Icon(Icons.chevron_right),
                     onTap: () async {
                       await Navigator.of(context).push(
                         MaterialPageRoute(

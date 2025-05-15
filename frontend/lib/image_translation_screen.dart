@@ -39,7 +39,7 @@ class _ImageTranslationScreenState extends State<ImageTranslationScreen> {
   var logger = Logger();
 
   final detection =
-      Settings.getValue<String>("detection_mode", defaultValue: "automatic");
+      Settings.getValue<String>("detection_mode", defaultValue: "no_location");
 
   String? get engine => Settings.getValue<String>(
         kModelTypeKey,
@@ -143,7 +143,7 @@ class _ImageTranslationScreenState extends State<ImageTranslationScreen> {
       final composite = '${engine}_:_$model';
       logger.d("COMPOSITE: $composite");
       var uri = Uri.parse("$_baseUrl/translate-image");
-      var req = http.MultipartRequest('POST', uri)
+      var request = http.MultipartRequest('POST', uri)
         ..headers['Authorization'] = 'Bearer $idToken'
         ..files.add(
             await http.MultipartFile.fromPath('file', _selectedImage!.path))
@@ -151,20 +151,34 @@ class _ImageTranslationScreenState extends State<ImageTranslationScreen> {
         ..fields['tgt_lang'] = _targetLang!
         ..fields['composite'] = composite;
 
-      var res = await req.send();
-
-      if (res.statusCode == 200) {
-        var body = await res.stream.bytesToString();
-        var json = jsonDecode(body);
+      var response = await request.send();
+      final responseString = await response.stream.bytesToString();
+      if (response.statusCode == 200) {
+        //var body = await response.stream.bytesToString();
+        var json = jsonDecode(responseString);
         setState(() {
           _originalImageUrl = json['original_image_url'];
           _whiteImageUrl = json['white_image_url'];
         });
       } else {
         if (!mounted) return;
-        logger.d("Translation failed with status: ${res.statusCode}");
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text("Status ${res.statusCode}")));
+        //   logger.d("Translation failed with status: ${response.statusCode}");
+        //   ScaffoldMessenger.of(context).showSnackBar(
+        //       SnackBar(content: Text("Status ${response.statusCode}")));
+        // }
+        String errorMessage;
+        try {
+          final errorJson = jsonDecode(responseString);
+          errorMessage = errorJson['error'] ??
+              "Translation failed with status: ${response.statusCode}";
+        } catch (_) {
+          errorMessage =
+              "Translation failed with status: ${response.statusCode}";
+        }
+        logger.d("Translation failed: $errorMessage");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errorMessage)),
+        );
       }
     } catch (e) {
       if (!mounted) return;
@@ -187,24 +201,28 @@ class _ImageTranslationScreenState extends State<ImageTranslationScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  void initState() {
+    super.initState();
     if (detection == "location") {
-      _sourceLang = Provider.of<LocationProvider>(context).language;
+      final localLang =
+          Provider.of<LocationProvider>(context, listen: false).language;
+      _sourceLang = localLang;
     }
-    logger.d("LANG: $_sourceLang");
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Translate Image")),
       body: Form(
         key: _formKey,
         child: Column(
           children: [
-            // -- LANGUAGES ROW --
             Padding(
               padding: const EdgeInsets.all(8),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  // Source
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       value: _sourceLang,
@@ -222,7 +240,6 @@ class _ImageTranslationScreenState extends State<ImageTranslationScreen> {
                       validator: (v) => v == null ? 'Please select' : null,
                     ),
                   ),
-
                   const SizedBox(width: 8),
                   IconButton(
                     icon: const Icon(Icons.swap_horiz),
@@ -235,8 +252,6 @@ class _ImageTranslationScreenState extends State<ImageTranslationScreen> {
                     },
                   ),
                   const SizedBox(width: 8),
-
-                  // Target
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       value: _targetLang,
@@ -257,8 +272,6 @@ class _ImageTranslationScreenState extends State<ImageTranslationScreen> {
                 ],
               ),
             ),
-
-            // -- IMAGE VIEWER --
             Expanded(
               child: Container(
                 width: double.infinity,
@@ -279,8 +292,6 @@ class _ImageTranslationScreenState extends State<ImageTranslationScreen> {
                 ),
               ),
             ),
-
-            // -- TOGGLE CHECKBOX --
             if (_originalImageUrl != null && _whiteImageUrl != null)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
@@ -295,15 +306,11 @@ class _ImageTranslationScreenState extends State<ImageTranslationScreen> {
                   ],
                 ),
               ),
-
-            // -- LOADING INDICATOR --
             if (_isLoading)
               const Padding(
                 padding: EdgeInsets.all(8.0),
                 child: CircularProgressIndicator(),
               ),
-
-            // -- BUTTONS ROW --
             Padding(
               padding: const EdgeInsets.all(8.0),
               child: Row(

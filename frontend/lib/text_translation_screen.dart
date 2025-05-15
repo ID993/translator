@@ -44,7 +44,7 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
   final _baseUrl = dotenv.env['API_URL']!;
 
   final detection =
-      Settings.getValue<String>("detection_mode", defaultValue: "automatic");
+      Settings.getValue<String>("detection_mode", defaultValue: "no_location");
 
   String? get engine => Settings.getValue<String>(
         kModelTypeKey,
@@ -67,6 +67,9 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
   }
 
   Future<void> _sendText() async {
+    logger.d("SRC: $_sourceLang, TGT: $_targetLang");
+    logger.d("SUGG: $_suggestion");
+    logger.d("FORCE: $force");
     setState(() {
       _isLoading = true;
       _suggestion = null;
@@ -170,12 +173,18 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    if (detection == "location") {
+      final localLang =
+          Provider.of<LocationProvider>(context, listen: false).language;
+      _sourceLang = localLang;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     bool isSupported(String code) => _languagesNames.containsKey(code);
-    if (detection == "location") {
-      _sourceLang = Provider.of<LocationProvider>(context).language;
-    }
-
     logger.d("SRC LANG: $_sourceLang");
     return Scaffold(
       resizeToAvoidBottomInset: false,
@@ -185,10 +194,10 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16.0),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               Padding(
-                padding: const EdgeInsets.all(8.0),
+                padding: const EdgeInsets.only(bottom: 16.0),
                 child: Row(
                   children: [
                     Expanded(
@@ -205,7 +214,10 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                           );
                         }).toList(),
                         onChanged: (value) {
-                          setState(() => _sourceLang = value);
+                          setState(() {
+                            _sourceLang = value;
+                            force = false;
+                          });
                           if (_inputController.text.isNotEmpty &&
                               _formKey.currentState!.validate()) {
                             _debounce?.cancel();
@@ -216,30 +228,37 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                             value == null ? 'Please select' : null,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      icon: const Icon(Icons.swap_horiz),
-                      onPressed: () async {
-                        setState(() {
-                          final tmp = _sourceLang;
-                          _sourceLang = _targetLang;
-                          _targetLang = tmp;
-                        });
-                        final text = _inputController.text;
-                        if (text.isNotEmpty &&
-                            _formKey.currentState!.validate()) {
-                          _debounce?.cancel();
-                          await _sendText();
-                        }
-                      },
+                    const SizedBox(width: 12),
+                    Column(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.swap_horiz),
+                          onPressed: () async {
+                            setState(() {
+                              final tmp = _sourceLang;
+                              _sourceLang = _targetLang;
+                              _targetLang = tmp;
+                              force = false;
+                            });
+                            final text = _inputController.text;
+                            if (text.isNotEmpty &&
+                                _formKey.currentState!.validate()) {
+                              _debounce?.cancel();
+                              await _sendText();
+                            }
+                          },
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: DropdownButtonFormField<String>(
                         value: _targetLang,
                         decoration: InputDecoration(
                           labelText: 'To',
                           border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 14),
                         ),
                         items: _languages.map((code) {
                           return DropdownMenuItem(
@@ -248,7 +267,9 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                           );
                         }).toList(),
                         onChanged: (value) {
-                          setState(() => _targetLang = value);
+                          setState(() {
+                            _targetLang = value;
+                          });
                           if (_inputController.text.isNotEmpty &&
                               _formKey.currentState!.validate()) {
                             _debounce?.cancel();
@@ -265,21 +286,27 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
               if (_suggestion != null &&
                   _sourceLang != null &&
                   _suggestion != _sourceLang)
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                Container(
+                  margin: const EdgeInsets.symmetric(vertical: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: (0.1 * 255)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "Detected language: ${fastTextLangNames[_suggestion!]!}.",
-                        style: TextStyle(color: Colors.orange, fontSize: 14),
+                        "Detected language: ${fastTextLangNames[_suggestion]}.",
+                        style: TextStyle(
+                            color: Colors.orange, fontWeight: FontWeight.w600),
                       ),
-                      SizedBox(height: 4),
+                      SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
                         runSpacing: 4,
                         children: [
-                          ElevatedButton(
+                          ElevatedButton.icon(
                             onPressed: () {
                               final cand = _suggestion!;
                               if (!isSupported(cand)) {
@@ -293,13 +320,13 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                               });
                               _sendText();
                             },
-                            child: Text(
+                            icon: const Icon(Icons.check),
+                            label: Text(
                               "Use ${fastTextLangNames[_suggestion]}",
                               style: TextStyle(fontSize: 14),
                             ),
                           ),
-                          SizedBox(width: 8),
-                          TextButton(
+                          TextButton.icon(
                             onPressed: () {
                               final keep = _sourceLang!;
                               if (!isSupported(keep)) {
@@ -312,8 +339,9 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                               });
                               _sendText();
                             },
-                            child: Text(
-                              "Keep ${_sourceLang != null ? fastTextLangNames[_sourceLang!] ?? _sourceLang! : '…'}",
+                            icon: const Icon(Icons.block),
+                            label: Text(
+                              "Keep ${fastTextLangNames[_sourceLang]}",
                               style: TextStyle(fontSize: 14),
                             ),
                           ),
@@ -322,6 +350,7 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
                     ],
                   ),
                 ),
+              const SizedBox(height: 10),
               Padding(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
