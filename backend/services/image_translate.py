@@ -6,6 +6,8 @@ from services.openai_llm import openai_translation
 from services.anthropic_llm import anthropic_translation
 from services.ocr import extract_word_boxes_easy_ocr, extract_word_boxes_pytesseract, merge_line_boxes, group_boxes_to_lines
 from models.m2m100 import get_model, get_tokenizer
+import pytesseract
+from utils.lang_detector import get_lang
 
 
 def translate_image_texts(texts, src_lang, tgt_lang, model_name):

@@ -11,7 +11,7 @@ from services.image_translate import translate_image_file, correct_image_orienta
 from services.audio_translate import translate_audio_file, extract_text_from_audio, SpeechRecognitionError
 from services.text_translate import translate_input_text
 from utils.hahsers import generate_image_cache_key, generate_audio_cache_key, generate_text_cache_key
-from utils.lang_detector import get_lang
+from utils.lang_detector import get_lang, image_lang_detector
 
 app = Flask(__name__)
 CORS(app)
@@ -75,6 +75,9 @@ def translate_image():
         img = Image.open(original_path)
         img = correct_image_orientation(img)
 
+        # if no text raise exception or error
+        detected = image_lang_detector(img)
+
         cache_key = generate_image_cache_key(original_path, src_lang, tgt_lang)
         cached_translation = cache.get(cache_key)
         if cached_translation:
@@ -102,7 +105,7 @@ def translate_image():
             "white_image_url":    f"{public_base}/{wht_name}"
         }
 
-        cache.set(cache_key, response, timeout=6)
+        cache.set(cache_key, response, timeout=600)
         return jsonify(response)
 
     except ValueError as e:
