@@ -1,6 +1,7 @@
 import re
 import os
 import fasttext
+import pytesseract
 
 
 UTILS_DIR = os.path.dirname(__file__)
@@ -39,3 +40,11 @@ def get_parent_language(chosen_lang, lang_map):
 def get_lang(text):
     lang = detect_language(text)[0][0]
     return get_parent_language(lang, PARENT_LANGS)
+
+
+def image_lang_detector(image):
+    image_text = pytesseract.image_to_string(image)
+    print(f"\nIMAGE TEXT: {image_text}\n")
+    detected_lang = get_lang(image_text)
+    print(f"\nDETECTED IMAGE LANG: {detected_lang}\n")
+    return detected_lang
