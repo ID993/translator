@@ -5,26 +5,56 @@ import torch
 from services.openai_llm import openai_translation
 from services.anthropic_llm import anthropic_translation
 from services.ocr import extract_word_boxes_easy_ocr, extract_word_boxes_pytesseract, merge_line_boxes, group_boxes_to_lines
-from models.m2m100 import get_model, get_tokenizer
+from models.models_registry import MODEL_REGISTRY, get_model, get_tokenizer
 import pytesseract
 from utils.lang_detector import get_lang
+import logging
+
+logger = logging.getLogger(__name__)
+
+LANGUAGE_MAP = {
+    "hr": "hr_HR",
+    "en": "en_XX",
+    "es": "es_XX",
+    "de": "de_DE",
+    "fr": "fr_XX",
+    "nl": "nl_XX",
+    "it": "it_IT",
+}
 
 
 def translate_image_texts(texts, src_lang, tgt_lang, model_name):
+    entry = MODEL_REGISTRY.get(model_name)
+    if not entry:
+        raise ValueError(f"Unsupported model: {model_name}")
 
-    model = get_model(model_name)
-    tokenizer = get_tokenizer(model_name)
-    tokenizer.src_lang = src_lang
+    tokenizer = entry["tokenizer"]
+    model = entry["model"]
+
+    logger.info(f"Using model: {model.config.name_or_path}")
+
+    if model_name == "facebook/mbart-large-50-many-to-many-mmt":
+        mapped_src_lang = LANGUAGE_MAP.get(src_lang)
+        mapped_tgt_lang = LANGUAGE_MAP.get(tgt_lang)
+
+        tokenizer.src_lang = mapped_src_lang
+        tgt_lang_id = tokenizer.lang_code_to_id[mapped_tgt_lang]
+
+    elif model_name == "facebook/m2m100_1.2B":
+        tokenizer.src_lang = src_lang
+        tgt_lang_id = tokenizer.get_lang_id(tgt_lang)
+
+    else:
+        raise ValueError(f"Unsupported model: {model_name}")
+
     inputs = tokenizer(texts, return_tensors="pt",
-                       padding=True, truncation=True)
-    tgt_lang_id = tokenizer.get_lang_id(tgt_lang)
+                       padding=True, truncation=False)
+
     with torch.no_grad():
         generated_tokens = model.generate(
             **inputs, forced_bos_token_id=tgt_lang_id)
-    print(
+    logger.info(
         f"\nTokenizer:\n{[tokenizer.decode(t, skip_special_tokens=True) for t in generated_tokens]}\n")
-    print(
-        f"\n{len([tokenizer.decode(t, skip_special_tokens=True) for t in generated_tokens])}\n")
     return [tokenizer.decode(t, skip_special_tokens=True) for t in generated_tokens]
 
 
@@ -35,7 +65,7 @@ def get_font_size(translated_lines, merged_boxes):
         heights.append(h)
 
     font_size = int((sum(heights)/len(heights))*0.75)-10
-    print(f"\nFONT SIZE: {font_size}\n")
+    logger.info(f"\nFONT SIZE: {font_size}\n")
     return font_size
 
 
@@ -58,22 +88,15 @@ def erase_and_replace_text(image, src_lang, tgt_lang, composite):
 
     translated_lines = []
     if engine == "ml":
-        print(f"\nUSING MACHINE LEARNING: {model_name}\n")
         translated_lines = translate_image_texts(
             line_texts, src_lang, tgt_lang, model_name)
     elif engine == "llm" and model_name == "chatgpt":
-        print("\nUSING OPEN AI\n")
+        logger.info("\nUSING OPEN AI\n")
         translated_lines = openai_translation(line_texts, src_lang, tgt_lang)
     elif engine == "llm" and model_name == "claude":
-        print("\nUSING ANTHROPIC\n")
+        logger.info("\nUSING ANTHROPIC\n")
         translated_lines = anthropic_translation(
             line_texts, src_lang, tgt_lang)
-
-    # heights = []
-    # for (translated_text, box) in zip(translated_lines, merged_boxes):
-    #     x, y, w, h = map(int, box)
-    #     print(h)
-    #     heights.append(h)
 
     font_size = get_font_size(translated_lines, merged_boxes)
 
@@ -85,7 +108,8 @@ def erase_and_replace_text(image, src_lang, tgt_lang, composite):
     for (translated_text, box) in zip(translated_lines, merged_boxes):
         x, y, w, h = map(int, box)
         region = image.crop((x, y, x + w, y + h))
-        blurred_region = region.filter(ImageFilter.GaussianBlur(radius=15))
+        blurred_region = region.filter(
+            ImageFilter.GaussianBlur(radius=15))  # 30
         image.paste(blurred_region, (x, y))
 
         font = ImageFont.truetype("arial.ttf", font_size)
@@ -113,7 +137,7 @@ def correct_image_orientation(image):
                 break
         exif_dict = dict(exif.items())
         orientation_value = exif_dict.get(orientation, None)
-        print(f"\nIMAGE ORIENTATION VALUE:\n{orientation_value}\n")
+        logger.info(f"\nIMAGE ORIENTATION VALUE:\n{orientation_value}\n")
         if orientation_value == 3:
             image = image.rotate(180, expand=True)
         elif orientation_value == 6:
@@ -121,7 +145,7 @@ def correct_image_orientation(image):
         elif orientation_value == 8:
             image = image.rotate(90, expand=True)
     except Exception as e:
-        print("No EXIF orientation data or error:", e)
+        logger.info("No EXIF orientation data or error:", e)
     return image
 
 
@@ -139,19 +163,3 @@ def translate_image_file(file, src_lang, tgt_lang, composite):
     img_io_original.seek(0)
     img_io_white.seek(0)
     return img_io_original, img_io_white
-
-
-# def translate_input_text(text, src_lang, tgt_lang):
-#     tokenizer.src_lang = src_lang
-#     inputs = tokenizer(text, return_tensors="pt",
-#                        padding=True, truncation=True)
-#     tgt_lang_id = tokenizer.get_lang_id(tgt_lang)
-#     with torch.no_grad():
-#         generated_tokens = model.generate(
-#             **inputs,
-#             forced_bos_token_id=tgt_lang_id,
-#             max_length=256,
-#             num_beams=5,
-#             early_stopping=True
-#         )
-#     return tokenizer.decode(generated_tokens[0], skip_special_tokens=True)

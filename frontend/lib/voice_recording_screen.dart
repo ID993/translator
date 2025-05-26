@@ -151,6 +151,13 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
     logger.d("SUGG: $_suggestion");
     logger.d("FORCE: $force");
     if (_recordFilePath == null) return;
+    if (_sourceLang == _targetLang) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text("Source and target languages must be different.")),
+      );
+      return;
+    }
     setState(() {
       _isLoading = true;
       //_suggestion = null;
@@ -184,7 +191,6 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
           } else {
             _suggestion = body['detected_lang'] as String;
           }
-
           _translatedAudioTtx = body['translation'] as String;
           _playbackLang = _targetLang;
         });
@@ -288,6 +294,7 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
                             .toList(),
                         onChanged: (v) => setState(() {
                           _sourceLang = v;
+                          force = false;
                         }),
                         validator: (v) => v == null ? 'Please select' : null,
                       ),

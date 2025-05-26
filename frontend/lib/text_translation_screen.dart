@@ -70,6 +70,13 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
     logger.d("SRC: $_sourceLang, TGT: $_targetLang");
     logger.d("SUGG: $_suggestion");
     logger.d("FORCE: $force");
+    if (_sourceLang == _targetLang) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text("Source and target languages must be different.")),
+      );
+      return;
+    }
     setState(() {
       _isLoading = true;
       _suggestion = null;
@@ -139,16 +146,17 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
 
   void _onInputChanged(String text) {
     _debounce?.cancel();
-
+    force = false;
     if (text.isEmpty) {
       setState(() {
         _translatedText = "";
         _outputController.text = "";
+        _suggestion = null;
       });
       return;
     }
 
-    _debounce = Timer(const Duration(milliseconds: 1000), () async {
+    _debounce = Timer(const Duration(milliseconds: 2000), () async {
       logger.d("Debounce timer fired; sending text.");
       await _sendText();
     });

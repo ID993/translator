@@ -2,6 +2,9 @@ import re
 import os
 import fasttext
 import pytesseract
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 UTILS_DIR = os.path.dirname(__file__)
@@ -10,7 +13,7 @@ MODEL_PATH = os.path.join(BACKEND_DIR, "models", "lid.176.bin")
 model = fasttext.load_model(MODEL_PATH)
 
 PARENT_LANGS = {
-    'hr': ['bs', 'sr'],
+    'hr': ['bs', 'sr', 'sh'],
     'nl': ['af', 'fy'],
     'es': ['ca', 'gl'],
     'en': ['cy']
@@ -23,7 +26,7 @@ def normalize(text):
     return " ".join(text.split())
 
 
-def detect_language(text: str, k: int = 1):
+def detect_language(text, k: int = 1):
     labels, probabilities = model.predict(normalize(text), k=k)
     results = [(lbl.replace("__label__", ""), prob)
                for lbl, prob in zip(labels, probabilities)]
@@ -43,8 +46,13 @@ def get_lang(text):
 
 
 def image_lang_detector(image):
-    image_text = pytesseract.image_to_string(image)
-    print(f"\nIMAGE TEXT: {image_text}\n")
-    detected_lang = get_lang(image_text)
-    print(f"\nDETECTED IMAGE LANG: {detected_lang}\n")
+    data = pytesseract.image_to_data(
+        image, output_type=pytesseract.Output.DICT)
+    image_text_list = [word for word in data["text"] if word.strip()]
+    if not image_text_list:
+        raise ValueError("No text detected in the image.")
+    full_text = " ".join(image_text_list)
+    detected_lang = get_lang(full_text)
+    logger.info(
+        f"\nDETECTED IMAGE LANG: {detected_lang}\nIMAGE TEXT: {full_text}\n")
     return detected_lang

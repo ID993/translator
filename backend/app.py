@@ -12,6 +12,7 @@ from services.audio_translate import translate_audio_file, extract_text_from_aud
 from services.text_translate import translate_input_text
 from utils.hahsers import generate_image_cache_key, generate_audio_cache_key, generate_text_cache_key
 from utils.lang_detector import get_lang, image_lang_detector
+import logging
 
 app = Flask(__name__)
 CORS(app)
@@ -22,7 +23,17 @@ TRANSLATED_DIR = "./uploads/translate"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["ORIGINAL_DIR"] = ORIGINAL_DIR
 app.config["TRANSLATED_DIR"] = TRANSLATED_DIR
+
 cache = Cache(app, config={"CACHE_TYPE": "SimpleCache"})
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
+    handlers=[logging.StreamHandler()]
+)
+
+logger = logging.getLogger(__name__)
+logger.info("Starting the app...")
 
 
 def verify_firebase_token(token):
@@ -75,13 +86,17 @@ def translate_image():
         img = Image.open(original_path)
         img = correct_image_orientation(img)
 
-        # if no text raise exception or error
         detected = image_lang_detector(img)
 
-        cache_key = generate_image_cache_key(original_path, src_lang, tgt_lang)
+        engine, model_name = composite.split('_:_')
+        if engine == "ml":
+            model_name = model_name.split("/")[1]
+
+        cache_key = generate_image_cache_key(
+            original_path, src_lang, tgt_lang, model_name)
         cached_translation = cache.get(cache_key)
         if cached_translation:
-            print(f"\nCache: {cached_translation}\n")
+            logger.info(f"\nCache: {cached_translation}\n")
             return jsonify(cached_translation)
 
         org_io, wht_io = translate_image_file(
@@ -89,8 +104,8 @@ def translate_image():
 
         out_dir = "./uploads/translate"
         os.makedirs(out_dir, exist_ok=True)
-        org_name = f"{base}_translated_org_{src_lang}-{tgt_lang}.png"
-        wht_name = f"{base}_translated_wht_{src_lang}-{tgt_lang}.png"
+        org_name = f"{base}_translated_org_{src_lang}-{tgt_lang}-{engine}-{model_name}.png"
+        wht_name = f"{base}_translated_wht_{src_lang}-{tgt_lang}-{engine}-{model_name}.png"
         org_path = os.path.join(out_dir, org_name)
         wht_path = os.path.join(out_dir, wht_name)
 
@@ -102,16 +117,17 @@ def translate_image():
         public_base = request.url_root.rstrip("/") + "/uploads/translate"
         response = {
             "original_image_url": f"{public_base}/{org_name}",
-            "white_image_url":    f"{public_base}/{wht_name}"
+            "white_image_url":    f"{public_base}/{wht_name}",
+            "detected_lang": detected
         }
 
-        cache.set(cache_key, response, timeout=600)
+        cache.set(cache_key, response, timeout=6)
         return jsonify(response)
 
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
-        return jsonify({"error": "Internal server error"}), 500
+        return jsonify({"error": f"Internal server error: {e}"}), 500
 
 
 @app.route("/translate-audio", methods=["POST", "GET"])
@@ -139,13 +155,18 @@ def translate_audio():
         text = extract_text_from_audio(audio_file, src_lang)
         detected = get_lang(text)
 
+        engine, model_name = composite.split('_:_')
+        if engine == "ml":
+            model_name = model_name.split("/")[1]
+
         cache_key = generate_audio_cache_key(
-            original_audio_path, src_lang, tgt_lang)
+            original_audio_path, src_lang, tgt_lang, model_name)
 
         cached_audio_translation = cache.get(cache_key)
 
         if cached_audio_translation:
-            print(f"\nCache: {cached_audio_translation}\nDETECTED: {detected}")
+            logger.info(
+                f"\nCache: {cached_audio_translation}\nDETECTED: {detected}")
             return jsonify({"translation": cached_audio_translation, "detected_lang": detected}), 200
 
         if not force_flag and detected != src_lang:
@@ -164,7 +185,7 @@ def translate_audio():
 @firebase_required
 def translate_text():
     data = request.get_json()
-    print("Received JSON data:", data)
+    logger.info("Received JSON data:", data)
 
     if not data or "text" not in data:
         return jsonify({"error": "No text provided"}), 400
@@ -176,10 +197,15 @@ def translate_text():
     force_flag = data.get("force", "0")
 
     detected = get_lang(text)
-    cache_key = generate_text_cache_key(text, src_lang, tgt_lang)
+
+    engine, model_name = composite.split('_:_')
+    if engine == "ml":
+        model_name = model_name.split("/")[1]
+
+    cache_key = generate_text_cache_key(text, src_lang, tgt_lang, model_name)
     cached_translation = cache.get(cache_key)
     if cached_translation:
-        print(f"\nCache: {cached_translation}\n")
+        logger.info(f"\nCache: {cached_translation}\n")
         return jsonify({"translation": cached_translation, "detected_lang": detected}), 200
 
     if not force_flag and detected != src_lang:
