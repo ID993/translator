@@ -160,7 +160,7 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
     }
     setState(() {
       _isLoading = true;
-      //_suggestion = null;
+      _suggestion = null;
     });
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -295,6 +295,7 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
                         onChanged: (v) => setState(() {
                           _sourceLang = v;
                           force = false;
+                          _suggestion = null;
                         }),
                         validator: (v) => v == null ? 'Please select' : null,
                       ),
@@ -311,9 +312,10 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
                                 final tmp = _sourceLang;
                                 _sourceLang = _targetLang;
                                 _targetLang = tmp;
+                                _suggestion = null;
                                 force = false;
                               });
-                              await _sendRecording();
+                              //await _sendRecording();
                             }
                           },
                         ),
