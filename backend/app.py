@@ -13,6 +13,8 @@ from services.text_translate import translate_input_text
 from utils.hahsers import generate_image_cache_key, generate_audio_cache_key, generate_text_cache_key
 from utils.lang_detector import get_lang, image_lang_detector
 import logging
+import time
+
 
 app = Flask(__name__)
 CORS(app)
@@ -114,10 +116,11 @@ def translate_image():
         with open(wht_path, "wb") as f:
             f.write(wht_io.getbuffer())
 
+        timestamp = int(time.time())
         public_base = request.url_root.rstrip("/") + "/uploads/translate"
         response = {
-            "original_image_url": f"{public_base}/{org_name}",
-            "white_image_url":    f"{public_base}/{wht_name}",
+            "original_image_url": f"{public_base}/{org_name}?v={timestamp}",
+            "white_image_url":    f"{public_base}/{wht_name}?v={timestamp}",
             "detected_lang": detected
         }
 
@@ -217,5 +220,21 @@ def translate_text():
     return jsonify({"translation": translated_text, "detected_lang": detected}), 200
 
 
+def clear_upload_folders():
+    folders = [ORIGINAL_DIR, TRANSLATED_DIR,
+               "./audio_uploads/original", "./audio_uploads/WAV"]
+    for folder in folders:
+        if os.path.exists(folder):
+            for file in os.listdir(folder):
+                file_path = os.path.join(folder, file)
+                try:
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+                except Exception as e:
+                    logger.warning(f"Failed to delete {file_path}: {e}")
+
+
+clear_upload_folders()
+
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=True, host="localhost", port=5000)

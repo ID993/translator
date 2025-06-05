@@ -64,7 +64,7 @@ def get_font_size(translated_lines, merged_boxes):
         x, y, w, h = map(int, box)
         heights.append(h)
 
-    font_size = int((sum(heights)/len(heights))*0.75)-10
+    font_size = int((sum(heights)/len(heights))*0.75)-15
     logger.info(f"\nFONT SIZE: {font_size}\n")
     return font_size
 
@@ -109,7 +109,7 @@ def erase_and_replace_text(image, src_lang, tgt_lang, composite):
         x, y, w, h = map(int, box)
         region = image.crop((x, y, x + w, y + h))
         blurred_region = region.filter(
-            ImageFilter.GaussianBlur(radius=15))  # 30
+            ImageFilter.GaussianBlur(radius=30))  # 30
         image.paste(blurred_region, (x, y))
 
         font = ImageFont.truetype("arial.ttf", font_size)
