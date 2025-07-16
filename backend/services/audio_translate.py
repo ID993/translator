@@ -15,8 +15,8 @@ r = sr.Recognizer()
 
 
 def m4a_to_wav(audio_file):
-    logger.info(f"\nRECIEVED AUDIO FILE: {audio_file}\n")
-    wav_audio_dir = "./audio_uploads/WAV/"
+    logger.info(f"\nRecieved audio file: {audio_file}\n")
+    wav_audio_dir = "./uploads/audio/WAV/"
     path, file = audio_file.split('\\')
     sound = AudioSegment.from_file(audio_file, format="m4a")
     base, ext = file.split('.')
@@ -34,7 +34,7 @@ def extract_text_from_audio(audio_file, src_lang):
     try:
         speech_to_text = r.recognize_google(audio_data, language=src_lang)
         speech_to_text = speech_to_text.lower()
-        logger.info(f"\nTHIS IS EXTRACTION TEXT: {speech_to_text}\n")
+        logger.info(f"Audio extraction text: {speech_to_text}\n")
         return speech_to_text
     except sr.UnknownValueError:
         logger.info("[ERROR] Could not understand the audio")

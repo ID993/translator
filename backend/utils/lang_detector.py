@@ -54,5 +54,5 @@ def image_lang_detector(image):
     full_text = " ".join(image_text_list)
     detected_lang = get_lang(full_text)
     logger.info(
-        f"\nDETECTED IMAGE LANG: {detected_lang}\nIMAGE TEXT: {full_text}\n")
+        f"Detected image language: {detected_lang}\nImage text: {full_text}\n")
     return detected_lang

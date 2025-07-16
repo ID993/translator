@@ -67,9 +67,6 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
   }
 
   Future<void> _sendText() async {
-    logger.d("SRC: $_sourceLang, TGT: $_targetLang");
-    logger.d("SUGG: $_suggestion");
-    logger.d("FORCE: $force");
     if (_sourceLang == _targetLang) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -118,13 +115,19 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
           }
           _outputController.text = _translatedText;
         });
-        logger.d("DETECTED LANG: $_suggestion");
-        logger.d("TEXT: $_translatedText");
       } else {
-        logger.d("Translation failed (${response.statusCode})");
+        String errorMessage;
+        try {
+          final body = jsonDecode(response.body);
+          errorMessage = body['error'] as String? ?? 'Unknown error';
+        } catch (_) {
+          errorMessage = 'Error ${response.statusCode}';
+        }
+
+        logger.d("Translation failed (${response.statusCode}): $errorMessage");
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Status ${response.statusCode}")),
+            SnackBar(content: Text(errorMessage)),
           );
         }
       }
@@ -156,7 +159,7 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
       return;
     }
 
-    _debounce = Timer(const Duration(milliseconds: 2000), () async {
+    _debounce = Timer(const Duration(milliseconds: 1000), () async {
       logger.d("Debounce timer fired; sending text.");
       await _sendText();
     });
@@ -193,7 +196,6 @@ class _TextTranslationScreenState extends State<TextTranslationScreen> {
   @override
   Widget build(BuildContext context) {
     bool isSupported(String code) => _languagesNames.containsKey(code);
-    logger.d("SRC LANG: $_sourceLang");
     return Scaffold(
       resizeToAvoidBottomInset: false,
       appBar: AppBar(title: const Text("Translate Text")),

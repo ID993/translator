@@ -2,11 +2,11 @@ import os
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ExifTags
 import torch
+import pytesseract
 from services.openai_llm import openai_translation
 from services.anthropic_llm import anthropic_translation
 from services.ocr import extract_word_boxes_easy_ocr, extract_word_boxes_pytesseract, merge_line_boxes, group_boxes_to_lines
-from models.models_registry import MODEL_REGISTRY, get_model, get_tokenizer
-import pytesseract
+from models.models_registry import MODEL_REGISTRY
 from utils.lang_detector import get_lang
 import logging
 
@@ -65,7 +65,9 @@ def get_font_size(translated_lines, merged_boxes):
         heights.append(h)
 
     font_size = int((sum(heights)/len(heights))*0.75)-15
-    logger.info(f"\nFONT SIZE: {font_size}\n")
+
+    logger.info(f"Font size: {font_size}\n")
+
     return font_size
 
 
@@ -91,10 +93,10 @@ def erase_and_replace_text(image, src_lang, tgt_lang, composite):
         translated_lines = translate_image_texts(
             line_texts, src_lang, tgt_lang, model_name)
     elif engine == "llm" and model_name == "chatgpt":
-        logger.info("\nUSING OPEN AI\n")
+        logger.info("Using OpenAI\n")
         translated_lines = openai_translation(line_texts, src_lang, tgt_lang)
     elif engine == "llm" and model_name == "claude":
-        logger.info("\nUSING ANTHROPIC\n")
+        logger.info("\nUsing Anthropic\n")
         translated_lines = anthropic_translation(
             line_texts, src_lang, tgt_lang)
 
@@ -137,7 +139,7 @@ def correct_image_orientation(image):
                 break
         exif_dict = dict(exif.items())
         orientation_value = exif_dict.get(orientation, None)
-        logger.info(f"\nIMAGE ORIENTATION VALUE:\n{orientation_value}\n")
+        logger.info(f"Image orientation value: {orientation_value}\n")
         if orientation_value == 3:
             image = image.rotate(180, expand=True)
         elif orientation_value == 6:
@@ -158,8 +160,10 @@ def translate_image_file(file, src_lang, tgt_lang, composite):
 
     img_io_original = BytesIO()
     img_io_white = BytesIO()
-    translated_image_original.save(img_io_original, format="PNG")
-    translated_image_white.save(img_io_white, format="PNG")
+    # translated_image_original.save(img_io_original, format="PNG")
+    # translated_image_white.save(img_io_white, format="PNG")
+    translated_image_original.save(img_io_original, format="WebP", quality=95, method=6)
+    translated_image_white.save(img_io_white, format="WebP", quality=95, method=6)
     img_io_original.seek(0)
     img_io_white.seek(0)
     return img_io_original, img_io_white

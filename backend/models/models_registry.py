@@ -21,10 +21,11 @@ SUPPORTED_MODELS = [
     "facebook/m2m100_1.2B",
 ]
 
-for model_name in SUPPORTED_MODELS:
-    logger.info(f"Loading model: {model_name}\n")
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
-    MODEL_REGISTRY[model_name] = {"tokenizer": tokenizer, "model": model}
-
-logger.info("All models loaded successfully.")
+def load_models():
+    for model_name in SUPPORTED_MODELS:
+        logger.info(f"Loading model: {model_name}\n")
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+        MODEL_REGISTRY[model_name] = {"tokenizer": tokenizer, "model": model}
+    logger.info("All models loaded successfully.")
+    return MODEL_REGISTRY
