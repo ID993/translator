@@ -10,10 +10,14 @@ from PIL import Image
 from services.image_translate import translate_image_file, correct_image_orientation
 from services.audio_translate import translate_audio_file, extract_text_from_audio, SpeechRecognitionError
 from services.text_translate import translate_input_text
-from utils.hahsers import generate_image_cache_key, generate_audio_cache_key, generate_text_cache_key
+from utils.hashers import generate_image_cache_key, generate_audio_cache_key, generate_text_cache_key
 from utils.lang_detector import get_lang, image_lang_detector
 import logging
 import time
+from models.models_registry import load_models
+from send2trash import send2trash
+from openai import OpenAIError
+from anthropic import APIError
 
 
 app = Flask(__name__)
@@ -36,7 +40,14 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 logger.info("Starting the app...")
+MODEL_REGISTRY = load_models()
 
+status_map = {
+    "authentication_error": 401,
+    "rate_limit_error": 429,
+    "connection_error": 502,
+    "api_error": 503,
+}
 
 def verify_firebase_token(token):
     try:
@@ -45,6 +56,17 @@ def verify_firebase_token(token):
     except Exception as e:
         return None
 
+@app.errorhandler(OpenAIError)
+def handle_openai_error(e):
+    code, _, message = e.args[0].partition(": ")
+    status = status_map.get(code, 500)
+    return jsonify({"error": message.strip()}), status
+
+@app.errorhandler(APIError)
+def handle_anthropic_error(e):
+    code, _, message = e.args[0].partition(": ")
+    status = status_map.get(code, 500)
+    return jsonify({"error": message.strip()}), status
 
 @app.route("/")
 def home():
@@ -106,8 +128,10 @@ def translate_image():
 
         out_dir = "./uploads/translate"
         os.makedirs(out_dir, exist_ok=True)
-        org_name = f"{base}_translated_org_{src_lang}-{tgt_lang}-{engine}-{model_name}.png"
-        wht_name = f"{base}_translated_wht_{src_lang}-{tgt_lang}-{engine}-{model_name}.png"
+        # org_name = f"{base}_translated_org_{src_lang}-{tgt_lang}-{engine}-{model_name}.png"
+        # wht_name = f"{base}_translated_wht_{src_lang}-{tgt_lang}-{engine}-{model_name}.png"
+        org_name = f"{base}_translated_org_{src_lang}-{tgt_lang}-{engine}-{model_name}.webp"
+        wht_name = f"{base}_translated_wht_{src_lang}-{tgt_lang}-{engine}-{model_name}.webp"
         org_path = os.path.join(out_dir, org_name)
         wht_path = os.path.join(out_dir, wht_name)
 
@@ -124,7 +148,7 @@ def translate_image():
             "detected_lang": detected
         }
 
-        cache.set(cache_key, response, timeout=6)
+        cache.set(cache_key, response, timeout=600)
         return jsonify(response)
 
     except ValueError as e:
@@ -146,7 +170,7 @@ def translate_audio():
         composite = request.form.get("composite", "ml_facebook/m2m100_1.2B")
         force_flag = request.form.get("force", "0") == "1"
 
-        original_audio_dir = "./audio_uploads/original"
+        original_audio_dir = "./uploads/audio/original"
         os.makedirs(original_audio_dir, exist_ok=True)
         base, ext = os.path.splitext(file.filename)
         original_audio_filename = f"{base}{ext}"
@@ -169,7 +193,7 @@ def translate_audio():
 
         if cached_audio_translation:
             logger.info(
-                f"\nCache: {cached_audio_translation}\nDETECTED: {detected}")
+                f"\nCache: {cached_audio_translation}\n")
             return jsonify({"translation": cached_audio_translation, "detected_lang": detected}), 200
 
         if not force_flag and detected != src_lang:
@@ -221,17 +245,25 @@ def translate_text():
 
 
 def clear_upload_folders():
-    folders = [ORIGINAL_DIR, TRANSLATED_DIR,
-               "./audio_uploads/original", "./audio_uploads/WAV"]
-    for folder in folders:
-        if os.path.exists(folder):
-            for file in os.listdir(folder):
-                file_path = os.path.join(folder, file)
+
+    folders = [
+        ORIGINAL_DIR,
+        TRANSLATED_DIR,
+        "./uploads/audio/original", "./uploads/audio/WAV",
+    ]
+    for base in folders:
+        if not os.path.isdir(base):
+            continue
+
+        for root, dirs, files in os.walk(base):
+            for fname in files:
+                path = os.path.join(root, fname)
                 try:
-                    if os.path.isfile(file_path):
-                        os.remove(file_path)
+                    send2trash(path)
+                    logger.info(f"Trashed file: {path}")
                 except Exception as e:
-                    logger.warning(f"Failed to delete {file_path}: {e}")
+                    logger.warning(f"Failed to send {path} to trash: {e}")
+
 
 
 clear_upload_folders()

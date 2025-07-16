@@ -69,8 +69,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       )]!,
                     ),
                     leading: const Icon(Icons.memory),
-                    trailing: const Icon(
-                        Icons.chevron_right), // <-- The arrow indicator
+                    trailing: const Icon(Icons.chevron_right),
                     onTap: () async {
                       await Navigator.of(context).push(
                         MaterialPageRoute(
@@ -94,7 +93,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                         ),
                       );
-                      setState(() {}); // Refresh subtitle after return
+                      setState(() {});
                     },
                   ),
                 if (currentModelType == 'llm')

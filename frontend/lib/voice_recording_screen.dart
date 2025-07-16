@@ -147,9 +147,6 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
   }
 
   Future<void> _sendRecording() async {
-    logger.d("SRC: $_sourceLang, TGT: $_targetLang");
-    logger.d("SUGG: $_suggestion");
-    logger.d("FORCE: $force");
     if (_recordFilePath == null) return;
     if (_sourceLang == _targetLang) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -169,11 +166,9 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
       }
       final idToken = await user.getIdToken();
       final composite = '${engine}_:_$model';
-      logger.d("COMPOSITE: $composite");
       var uri = Uri.parse("$_baseUrl/translate-audio");
       var request = http.MultipartRequest('POST', uri)
         ..headers['Authorization'] = 'Bearer $idToken';
-
       request.files
           .add(await http.MultipartFile.fromPath('file', _recordFilePath!));
       request.fields['src_lang'] = _sourceLang!;
@@ -194,7 +189,6 @@ class _VoiceRecordingScreenState extends State<VoiceRecordingScreen> {
           _translatedAudioTtx = body['translation'] as String;
           _playbackLang = _targetLang;
         });
-        logger.d("DETECTED LANG: $_suggestion");
       } else {
         if (!mounted) return;
         String errorMessage;

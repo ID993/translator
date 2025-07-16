@@ -20,7 +20,6 @@ class HomeScreen extends StatelessWidget {
     final currentPos = locationProvider.currentPosition;
     logger.d(currentPos);
 
-    // Safely extract country and language only if position is available
     final String? country = currentPos != null ? locationProvider.country : '';
     final String? lang = currentPos != null ? locationProvider.language : '';
 

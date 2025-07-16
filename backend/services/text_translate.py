@@ -1,7 +1,7 @@
 import torch
 from services.openai_llm import openai_translation
 from services.anthropic_llm import anthropic_translation
-from models.models_registry import MODEL_REGISTRY, get_model, get_tokenizer
+from models.models_registry import MODEL_REGISTRY
 import logging
 
 logger = logging.getLogger(__name__)
@@ -52,16 +52,16 @@ def ml_translate(texts, src_lang, tgt_lang, model_name):
 
 def translate_input_text(text, src_lang, tgt_lang, composite):
     engine, model_name = composite.split('_:_')
-    logger.info(f"\nMODEL NAME: {engine} {model_name}\n")
+    logger.info(f"Model name: {engine} {model_name}\n")
     if engine == "ml":
         logger.info(
-            f"\nUSING MACHINE LEARNING {model_name}: {text}, {src_lang}, {tgt_lang}\n")
+            f"Using machine learnining model:\n{model_name}, {text}, {src_lang}, {tgt_lang}\n")
         return ml_translate([text], src_lang, tgt_lang, model_name)[0]
     elif engine == "llm" and model_name == "chatgpt":
-        logger.info(f"\nUSING OPEN AI: {text}, {src_lang}, {tgt_lang}\n")
+        logger.info(f"Using OpenAI:\n{text}, {src_lang}, {tgt_lang}\n")
         return openai_translation(text, src_lang, tgt_lang)
     elif engine == "llm" and model_name == "claude":
-        logger.info(f"\nUSING ANTHROPIC: {text}, {src_lang}, {tgt_lang}\n")
+        logger.info(f"Using Anthropic:\n{text}, {src_lang}, {tgt_lang}\n")
         return anthropic_translation(text, src_lang, tgt_lang)
     else:
         raise ValueError(f"Unknown model {composite}")
