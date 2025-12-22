@@ -1,7 +1,6 @@
-# backend/auth.py
 from functools import wraps
 from flask import request, jsonify, g
-from firebase_config import auth as firebase_auth  # your firebase_admin.auth
+from firebase_config import auth as firebase_auth
 
 
 def firebase_required(f):
