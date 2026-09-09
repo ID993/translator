@@ -1,8 +1,0 @@
-ngrok http http://localhost:5000 - start ngrok
-python app.py - start backend
-flutter clean - clean build
-flutter pub get - rebuild
-flutter run - start frontend
-
-python -m pip install --upgrade pip
-flutter upgrade
