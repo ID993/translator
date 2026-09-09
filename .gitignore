@@ -1,1 +1,40 @@
+# environment files and credentials
+.env
+.env.*
+!.env.example
+**/firebase-adminsdk*.json
+**/google-services.json
+**/key.properties
+**/*.jks
+**/*.keystore
+
+# python
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.coverage
+**/htmlcov/
+**/.venv/
+**/venv/
+
+# flutter, dart and android build output
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.gradle/
+**/.cxx/
+**/build/
+**/local.properties
+
+# runtime uploads and generated translations
+backend/uploads/
+backend/wrong_uploads/
+
+# downloaded models
 *.bin
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
