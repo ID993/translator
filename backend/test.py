@@ -4,7 +4,7 @@ import fasttext
 
 
 LOCAL_DIR = os.path.dirname(__file__)
-MODEL_PATH = os.path.join(LOCAL_DIR, "models", "lid.176.bin")
+MODEL_PATH = os.path.join(LOCAL_DIR, "models", "lid.176.ftz")
 
 model = fasttext.load_model(MODEL_PATH)
 

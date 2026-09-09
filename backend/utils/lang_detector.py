@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 UTILS_DIR = os.path.dirname(__file__)
 BACKEND_DIR = os.path.dirname(UTILS_DIR)
-MODEL_PATH = os.path.join(BACKEND_DIR, "models", "lid.176.bin")
+MODEL_PATH = os.path.join(BACKEND_DIR, "models", "lid.176.ftz")
 model = fasttext.load_model(MODEL_PATH)
 
 PARENT_LANGS = {
